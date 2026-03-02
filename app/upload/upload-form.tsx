@@ -1,10 +1,10 @@
 "use client";
-
 import { useRef, useState } from "react";
-import { Upload, X } from "lucide-react";
+import { ImagePlus, Upload, X } from "lucide-react";
 
 type UploadFormProps = {
   isLoggedIn: boolean;
+  allowGuestUpload: boolean;
 };
 
 type UploadMetrics = {
@@ -13,6 +13,8 @@ type UploadMetrics = {
   total: number;
   speedBytes: number;
 };
+
+const MAX_IMAGE_COUNT = 9;
 
 function formatBytes(sizeBytes: number) {
   const units = ["B", "KB", "MB", "GB", "TB"];
@@ -26,13 +28,27 @@ function formatBytes(sizeBytes: number) {
   return `${size.toFixed(precision)} ${units[unitIndex]}`;
 }
 
-export function UploadForm({ isLoggedIn }: UploadFormProps) {
+export function UploadForm({ isLoggedIn, allowGuestUpload }: UploadFormProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   const [file, setFile] = useState<File | null>(null);
+  const [images, setImages] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [metrics, setMetrics] = useState<UploadMetrics | null>(null);
+
+  const guestDisabled = !isLoggedIn && !allowGuestUpload;
+
+  const syncImageInput = (nextImages: File[]) => {
+    if (!imageInputRef.current) {
+      return;
+    }
+
+    const dt = new DataTransfer();
+    nextImages.forEach((img) => dt.items.add(img));
+    imageInputRef.current.files = dt.files;
+  };
 
   const onFileChanged = (nextFile: File | null) => {
     setError(null);
@@ -44,9 +60,26 @@ export function UploadForm({ isLoggedIn }: UploadFormProps) {
     onFileChanged(event.target.files?.[0] ?? null);
   };
 
+  const onImageInputChange: React.ChangeEventHandler<HTMLInputElement> = (event) => {
+    const selected = Array.from(event.target.files ?? []);
+    if (selected.length === 0) {
+      return;
+    }
+
+    const merged = [...images, ...selected].slice(0, MAX_IMAGE_COUNT);
+    setImages(merged);
+    syncImageInput(merged);
+  };
+
+  const removeImage = (index: number) => {
+    const next = images.filter((_, i) => i !== index);
+    setImages(next);
+    syncImageInput(next);
+  };
+
   const onDrop: React.DragEventHandler<HTMLLabelElement> = (event) => {
     event.preventDefault();
-    if (uploading) {
+    if (uploading || guestDisabled) {
       return;
     }
 
@@ -67,7 +100,7 @@ export function UploadForm({ isLoggedIn }: UploadFormProps) {
   const onSubmit: React.FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
     const form = event.currentTarget;
-    if (uploading) {
+    if (uploading || guestDisabled) {
       return;
     }
 
@@ -132,13 +165,14 @@ export function UploadForm({ isLoggedIn }: UploadFormProps) {
   return (
     <form className="upload-form" onSubmit={onSubmit}>
       {!isLoggedIn ? <p className="hint-text">当前为游客上传，发布者会显示为“匿名用户”。</p> : null}
+      {guestDisabled ? <p className="form-error">管理员已关闭游客上传，请先登录后上传。</p> : null}
 
       <div className="field-group">
         <label htmlFor="torrentFile">种子文件</label>
         <label className="dropzone" htmlFor="torrentFile" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
           <input
             accept=".torrent"
-            disabled={uploading}
+            disabled={uploading || guestDisabled}
             id="torrentFile"
             name="torrentFile"
             onChange={onInputChange}
@@ -183,7 +217,9 @@ export function UploadForm({ isLoggedIn }: UploadFormProps) {
           <div className="upload-progress-wrap">
             <div className="upload-progress-meta">
               <span>上传进度 {metrics.percent.toFixed(1)}%</span>
-              <span>{formatBytes(metrics.loaded)} / {formatBytes(metrics.total)}</span>
+              <span>
+                {formatBytes(metrics.loaded)} / {formatBytes(metrics.total)}
+              </span>
             </div>
             <div className="upload-progress-track">
               <div className="upload-progress-bar" style={{ width: `${metrics.percent}%` }} />
@@ -197,7 +233,7 @@ export function UploadForm({ isLoggedIn }: UploadFormProps) {
         <div className="field-group span-2">
           <label htmlFor="name">种子名称</label>
           <input
-            disabled={uploading}
+            disabled={uploading || guestDisabled}
             id="name"
             name="name"
             placeholder="[字幕组] 标题 - 集数 [分辨率] [编码]"
@@ -208,7 +244,7 @@ export function UploadForm({ isLoggedIn }: UploadFormProps) {
 
         <div className="field-group">
           <label htmlFor="category">分类</label>
-          <select defaultValue="" disabled={uploading} id="category" name="category" required>
+          <select defaultValue="" disabled={uploading || guestDisabled} id="category" name="category" required>
             <option disabled value="">
               选择分类
             </option>
@@ -224,13 +260,13 @@ export function UploadForm({ isLoggedIn }: UploadFormProps) {
 
         <div className="field-group">
           <label htmlFor="tags">标签 (逗号分隔)</label>
-          <input disabled={uploading} id="tags" name="tags" placeholder="1080p, HEVC, FLAC" type="text" />
+          <input disabled={uploading || guestDisabled} id="tags" name="tags" placeholder="1080p, HEVC, FLAC" type="text" />
         </div>
 
         <div className="field-group span-2">
           <label htmlFor="description">描述</label>
           <textarea
-            disabled={uploading}
+            disabled={uploading || guestDisabled}
             id="description"
             name="description"
             placeholder="输入种子的详细描述..."
@@ -240,9 +276,45 @@ export function UploadForm({ isLoggedIn }: UploadFormProps) {
           <small>可以使用 Markdown 进行格式化。</small>
         </div>
 
+        <div className="field-group span-2">
+          <label htmlFor="images">种子图片（最多9张）</label>
+          <input
+            accept="image/jpeg,image/png,image/webp,image/svg+xml"
+            disabled={uploading || guestDisabled || images.length >= MAX_IMAGE_COUNT}
+            id="images"
+            multiple
+            name="images"
+            onChange={onImageInputChange}
+            ref={imageInputRef}
+            type="file"
+          />
+          <small>支持 jpg/png/webp/svg，单张最大 2MB。</small>
+
+          {images.length > 0 ? (
+            <div className="image-preview-grid">
+              {images.map((image, index) => (
+                <div className="image-preview-item" key={`${image.name}-${index}`}>
+                  <div className="image-preview-thumb">
+                    <img alt={image.name} src={URL.createObjectURL(image)} />
+                  </div>
+                  <p title={image.name}>{image.name}</p>
+                  <button disabled={uploading} onClick={() => removeImage(index)} type="button">
+                    删除
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="image-empty-hint">
+              <ImagePlus size={16} />
+              <span>未选择图片</span>
+            </div>
+          )}
+        </div>
+
         {isLoggedIn ? (
           <label className="checkbox-row span-2" htmlFor="anonymous">
-            <input disabled={uploading} id="anonymous" name="anonymous" type="checkbox" />
+            <input disabled={uploading || guestDisabled} id="anonymous" name="anonymous" type="checkbox" />
             <span>
               <strong>匿名上传</strong>
               <small>上传后将不显示您的用户名。</small>
@@ -263,15 +335,19 @@ export function UploadForm({ isLoggedIn }: UploadFormProps) {
             if (inputRef.current) {
               inputRef.current.value = "";
             }
+            if (imageInputRef.current) {
+              imageInputRef.current.value = "";
+            }
             setError(null);
             setMetrics(null);
             setFile(null);
+            setImages([]);
           }}
           type="reset"
         >
           取消
         </button>
-        <button className="primary-btn" disabled={uploading} type="submit">
+        <button className="primary-btn" disabled={uploading || guestDisabled} type="submit">
           {uploading ? "上传中..." : "提交种子"}
         </button>
       </div>

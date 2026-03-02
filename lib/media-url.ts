@@ -16,5 +16,9 @@ export function toMediaUrl(relativePath: string) {
     return `/media/site/${encodeURIComponent(fileName)}`;
   }
 
+  if (relativePath.startsWith("torrent-images/")) {
+    return `/media/torrent-images/${encodeURIComponent(fileName)}`;
+  }
+
   return "";
 }

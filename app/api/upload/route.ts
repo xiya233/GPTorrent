@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME, getUserStateFromToken } from "@/lib/auth";
-import { insertTorrent } from "@/lib/db";
+import { createTorrentWithMeta, getSiteFeatureFlags, getTorrentByInfoHash } from "@/lib/db";
+import { parseTorrentMeta } from "@/lib/torrent";
 import { formatBytes, saveUploadedFile } from "@/lib/storage";
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_TORRENT_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_IMAGE_COUNT = 9;
+const MAX_IMAGE_SIZE = 2 * 1024 * 1024;
 
 function normalizeTags(input: string) {
   return input
@@ -13,12 +16,19 @@ function normalizeTags(input: string) {
     .slice(0, 12);
 }
 
+const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/svg+xml"]);
+
 export async function POST(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value ?? null;
 
   const { user, blocked } = getUserStateFromToken(token ?? null);
   if (blocked) {
     return NextResponse.json({ error: "账号不可用，请重新登录" }, { status: 403 });
+  }
+
+  const flags = getSiteFeatureFlags();
+  if (!user && !flags.allowGuestUpload) {
+    return NextResponse.json({ error: "管理员已关闭游客上传功能" }, { status: 403 });
   }
 
   const formData = await request.formData();
@@ -42,20 +52,62 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "请上传 .torrent 文件" }, { status: 400 });
   }
 
-  const saved = await saveUploadedFile({
+  let meta;
+  try {
+    const rawBytes = new Uint8Array(await file.arrayBuffer());
+    meta = await parseTorrentMeta(rawBytes);
+  } catch {
+    return NextResponse.json({ error: "种子文件解析失败，请确认文件有效" }, { status: 400 });
+  }
+
+  const duplicated = getTorrentByInfoHash(meta.infoHash);
+  if (duplicated && duplicated.status === "active") {
+    return NextResponse.json({ error: "该种子已存在，禁止重复上传" }, { status: 409 });
+  }
+
+  const savedTorrent = await saveUploadedFile({
     file,
     dir: "uploads",
-    maxBytes: MAX_FILE_SIZE,
+    maxBytes: MAX_TORRENT_FILE_SIZE,
     allowedExts: [".torrent"],
   });
 
-  if (!saved.ok) {
-    return NextResponse.json({ error: saved.error }, { status: 400 });
+  if (!savedTorrent.ok) {
+    return NextResponse.json({ error: savedTorrent.error }, { status: 400 });
+  }
+
+  const imageFiles = formData
+    .getAll("images")
+    .filter((entry): entry is File => entry instanceof File && entry.size > 0);
+
+  if (imageFiles.length > MAX_IMAGE_COUNT) {
+    return NextResponse.json({ error: `最多上传 ${MAX_IMAGE_COUNT} 张图片` }, { status: 400 });
+  }
+
+  const imagePaths: string[] = [];
+
+  for (const image of imageFiles) {
+    if (!IMAGE_TYPES.has(image.type)) {
+      return NextResponse.json({ error: "图片仅支持 jpg/png/webp/svg" }, { status: 400 });
+    }
+
+    const savedImage = await saveUploadedFile({
+      file: image,
+      dir: "torrent-images",
+      maxBytes: MAX_IMAGE_SIZE,
+      allowedExts: [".jpg", ".jpeg", ".png", ".webp", ".svg"],
+    });
+
+    if (!savedImage.ok) {
+      return NextResponse.json({ error: savedImage.error }, { status: 400 });
+    }
+
+    imagePaths.push(savedImage.relativePath);
   }
 
   const isAnonymous = user ? isAnonymousInput : true;
 
-  insertTorrent({
+  const torrentId = createTorrentWithMeta({
     name,
     category,
     sizeBytes: file.size,
@@ -65,8 +117,13 @@ export async function POST(request: NextRequest) {
     uploaderName: user ? user.username : "访客",
     uploaderUserId: user?.id ?? null,
     isAnonymous,
-    filePath: saved.relativePath,
+    filePath: savedTorrent.relativePath,
+    infoHash: meta.infoHash,
+    magnetUri: meta.magnetUri,
+    trackers: meta.trackers,
+    files: meta.files,
+    imagePaths,
   });
 
-  return NextResponse.json({ ok: true, redirect: "/" });
+  return NextResponse.json({ ok: true, redirect: `/torrent/${torrentId}` });
 }

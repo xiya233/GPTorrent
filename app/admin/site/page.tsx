@@ -2,12 +2,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { SiteForm } from "@/app/admin/site/site-form";
 import { requireAdminUser } from "@/lib/auth";
-import { getSiteBranding } from "@/lib/db";
+import { getSiteBranding, getSiteSettings } from "@/lib/db";
 import { toMediaUrl } from "@/lib/media-url";
 
 export default async function AdminSitePage() {
   await requireAdminUser();
   const branding = getSiteBranding();
+  const settings = getSiteSettings();
   const logoUrl = toMediaUrl(branding.logoPath);
 
   return (
@@ -20,7 +21,11 @@ export default async function AdminSitePage() {
       </div>
 
       <div className="admin-grid site-grid">
-        <SiteForm titleText={branding.titleText} />
+        <SiteForm
+          allowGuestUpload={settings.allowGuestUpload}
+          allowUserDeleteTorrent={settings.allowUserDeleteTorrent}
+          titleText={branding.titleText}
+        />
 
         <section className="card site-preview">
           <h2>预览</h2>

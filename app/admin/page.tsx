@@ -29,9 +29,13 @@ export default async function AdminPage() {
           <h2>用户管理</h2>
           <p>添加、封禁、删除用户</p>
         </Link>
+        <Link className="card admin-link-card" href="/admin/torrents">
+          <h2>种子管理</h2>
+          <p>查看所有种子并删除任意记录</p>
+        </Link>
         <Link className="card admin-link-card" href="/admin/site">
           <h2>站点配置</h2>
-          <p>设置 LOGO 与标题文字</p>
+          <p>设置 LOGO/标题及上传权限开关</p>
         </Link>
       </div>
     </div>

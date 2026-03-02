@@ -16,7 +16,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
 
   const row = getTorrentById(torrentId);
-  if (!row || !row.file_path) {
+  if (!row || row.status !== "active" || !row.file_path) {
     return new Response("Not Found", { status: 404 });
   }
 

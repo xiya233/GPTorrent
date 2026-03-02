@@ -7,12 +7,18 @@
     "build": "bunx --bun next build",
     "start": "bunx --bun next start",
     "lint": "bunx --bun next lint",
-    "db:init": "bun run scripts/init-db.ts"
+    "db:init": "bun run scripts/init-db.ts",
+    "tracker:worker": "bun run scripts/tracker-worker.ts",
+    "torrents:backfill": "bun run scripts/backfill-torrent-meta.ts",
+    "torrents:cleanup": "bun run scripts/cleanup-torrents.ts"
   },
   "dependencies": {
     "@noble/hashes": "^2.0.1",
+    "bencode": "^4.0.0",
+    "bittorrent-tracker": "^11.2.2",
     "lucide-react": "^0.576.0",
     "next": "^16.1.6",
+    "parse-torrent": "^11.0.19",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },

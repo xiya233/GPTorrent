@@ -20,6 +20,8 @@ export async function adminUpdateSiteBrandingAction(
 
   const titleText = ((formData.get("titleText") as string | null) ?? "").trim();
   const logoFile = formData.get("logoFile");
+  const allowGuestUpload = formData.get("allowGuestUpload") === "on";
+  const allowUserDeleteTorrent = formData.get("allowUserDeleteTorrent") === "on";
 
   if (!titleText || titleText.length > 60) {
     return { error: "标题长度需在 1-60 字符之间", success: null };
@@ -49,6 +51,8 @@ export async function adminUpdateSiteBrandingAction(
   updateSiteBranding({
     titleText,
     logoPath,
+    allowGuestUpload,
+    allowUserDeleteTorrent,
   });
 
   revalidatePath("/");

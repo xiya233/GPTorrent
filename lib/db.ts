@@ -10,6 +10,7 @@ fs.mkdirSync(dataDir, { recursive: true });
 
 export type UserRole = "user" | "admin";
 export type UserStatus = "active" | "banned" | "deleted";
+export type TorrentStatus = "active" | "deleted_user" | "deleted_admin";
 
 export type TorrentRow = {
   id: number;
@@ -23,12 +24,55 @@ export type TorrentRow = {
   leechers: number;
   completed: number;
   created_at: string;
+  updated_at: string;
   is_trusted: number;
   is_free_download: number;
   uploader_name: string;
   is_anonymous: number;
   uploader_user_id: number | null;
   file_path: string;
+  info_hash: string | null;
+  magnet_uri: string | null;
+  status: TorrentStatus;
+  tracker_last_checked_at: string | null;
+  tracker_source: string | null;
+  tracker_state: string;
+  deleted_at: string | null;
+  deleted_by_user_id: number | null;
+};
+
+export type TorrentTrackerRow = {
+  id: number;
+  torrent_id: number;
+  tier: number;
+  announce_url: string;
+  scrape_url: string;
+  is_primary: number;
+  last_checked_at: string | null;
+  last_error: string;
+};
+
+export type TorrentFileRow = {
+  id: number;
+  torrent_id: number;
+  file_path: string;
+  file_size_bytes: number;
+  sort_order: number;
+};
+
+export type TorrentImageRow = {
+  id: number;
+  torrent_id: number;
+  image_path: string;
+  sort_order: number;
+  created_at: string;
+};
+
+export type TorrentDetail = {
+  torrent: TorrentRow;
+  trackers: TorrentTrackerRow[];
+  files: TorrentFileRow[];
+  images: TorrentImageRow[];
 };
 
 export type AuthUser = {
@@ -64,6 +108,13 @@ export type SiteBranding = {
   logoPath: string;
 };
 
+export type SiteFeatureFlags = {
+  allowGuestUpload: boolean;
+  allowUserDeleteTorrent: boolean;
+};
+
+export type SiteSettings = SiteBranding & SiteFeatureFlags;
+
 type InsertTorrentInput = {
   name: string;
   category: string;
@@ -77,10 +128,27 @@ type InsertTorrentInput = {
   filePath: string;
 };
 
+type CreateTorrentWithMetaInput = InsertTorrentInput & {
+  infoHash: string;
+  magnetUri: string;
+  trackers: Array<{
+    tier: number;
+    announceUrl: string;
+    scrapeUrl: string;
+    isPrimary: boolean;
+  }>;
+  files: Array<{
+    path: string;
+    sizeBytes: number;
+  }>;
+  imagePaths: string[];
+};
+
 const db = new Database(dbPath, { create: true });
 
 db.exec(`
 PRAGMA journal_mode = WAL;
+PRAGMA busy_timeout = 10000;
 
 CREATE TABLE IF NOT EXISTS torrents (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -130,8 +198,41 @@ CREATE TABLE IF NOT EXISTS site_settings (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS torrent_trackers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  torrent_id INTEGER NOT NULL,
+  tier INTEGER NOT NULL,
+  announce_url TEXT NOT NULL,
+  scrape_url TEXT NOT NULL,
+  is_primary INTEGER NOT NULL DEFAULT 0,
+  last_checked_at TEXT,
+  last_error TEXT NOT NULL DEFAULT '',
+  FOREIGN KEY(torrent_id) REFERENCES torrents(id)
+);
+
+CREATE TABLE IF NOT EXISTS torrent_files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  torrent_id INTEGER NOT NULL,
+  file_path TEXT NOT NULL,
+  file_size_bytes INTEGER NOT NULL,
+  sort_order INTEGER NOT NULL,
+  FOREIGN KEY(torrent_id) REFERENCES torrents(id)
+);
+
+CREATE TABLE IF NOT EXISTS torrent_images (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  torrent_id INTEGER NOT NULL,
+  image_path TEXT NOT NULL,
+  sort_order INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(torrent_id) REFERENCES torrents(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_torrent_trackers_torrent_id ON torrent_trackers(torrent_id);
+CREATE INDEX IF NOT EXISTS idx_torrent_files_torrent_id ON torrent_files(torrent_id);
+CREATE INDEX IF NOT EXISTS idx_torrent_images_torrent_id ON torrent_images(torrent_id);
 `);
 
 function ensureColumn(table: string, column: string, alterSql: string) {
@@ -142,11 +243,34 @@ function ensureColumn(table: string, column: string, alterSql: string) {
 }
 
 ensureColumn("torrents", "uploader_user_id", "ALTER TABLE torrents ADD COLUMN uploader_user_id INTEGER");
+ensureColumn("torrents", "info_hash", "ALTER TABLE torrents ADD COLUMN info_hash TEXT");
+ensureColumn("torrents", "magnet_uri", "ALTER TABLE torrents ADD COLUMN magnet_uri TEXT");
+ensureColumn("torrents", "status", "ALTER TABLE torrents ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+ensureColumn("torrents", "tracker_last_checked_at", "ALTER TABLE torrents ADD COLUMN tracker_last_checked_at TEXT");
+ensureColumn("torrents", "tracker_source", "ALTER TABLE torrents ADD COLUMN tracker_source TEXT");
+ensureColumn("torrents", "tracker_state", "ALTER TABLE torrents ADD COLUMN tracker_state TEXT NOT NULL DEFAULT 'pending'");
+ensureColumn("torrents", "deleted_at", "ALTER TABLE torrents ADD COLUMN deleted_at TEXT");
+ensureColumn("torrents", "deleted_by_user_id", "ALTER TABLE torrents ADD COLUMN deleted_by_user_id INTEGER");
+ensureColumn("torrents", "updated_at", "ALTER TABLE torrents ADD COLUMN updated_at TEXT");
+ensureColumn(
+  "site_settings",
+  "allow_guest_upload",
+  "ALTER TABLE site_settings ADD COLUMN allow_guest_upload INTEGER NOT NULL DEFAULT 1",
+);
+ensureColumn(
+  "site_settings",
+  "allow_user_delete_torrent",
+  "ALTER TABLE site_settings ADD COLUMN allow_user_delete_torrent INTEGER NOT NULL DEFAULT 1",
+);
+
+db.exec(
+  "CREATE UNIQUE INDEX IF NOT EXISTS idx_torrents_info_hash_unique ON torrents(info_hash) WHERE status = 'active' AND info_hash IS NOT NULL AND info_hash != ''",
+);
 
 const settingsExists = db.query("SELECT id FROM site_settings WHERE id = 1").get() as { id: number } | null;
 if (!settingsExists) {
   db.query(
-    "INSERT INTO site_settings (id, title_text, logo_path, updated_at) VALUES (1, 'Sukebei.dl', '', ?)",
+    "INSERT INTO site_settings (id, title_text, logo_path, allow_guest_upload, allow_user_delete_torrent, updated_at) VALUES (1, 'Sukebei.dl', '', 1, 1, ?)",
   ).run(new Date().toISOString());
 }
 
@@ -161,19 +285,19 @@ function seedTorrentsIfNeeded() {
   }
 
   const seedRows = [
-    ["[SubDesu] 咒术回战 - S2E14 [1080p] [HEVC]", "动画", 1503238554, "1.4 GiB", "1080p,HEVC", "默认示例数据", 2402, 124, 582, "2026-03-02 11:00:00", 1, 1, "system", 0, null, "samples/sample-1.torrent"],
-    ["(Hi-Res) 宇多田光 - Science Fiction [FLAC 24bit/96kHz]", "音乐", 933232640, "890 MiB", "FLAC,Hi-Res", "默认示例数据", 156, 12, 45, "2026-03-02 08:00:00", 0, 1, "system", 0, null, "samples/sample-2.torrent"],
-    ["奥本海默 (2023) [2160p] [4K] [HDR] [x265]", "电影", 19756849562, "18.4 GiB", "4K,HDR,x265", "默认示例数据", 5892, 845, 2100, "2026-03-01 23:00:00", 1, 1, "system", 0, null, "samples/sample-3.torrent"],
-    ["博德之门 3 - 豪华版 [v4.1.1.3622274] + DLCs", "游戏", 130996502528, "122 GiB", "RPG,DLC", "默认示例数据", 1203, 450, 890, "2026-03-01 10:00:00", 0, 1, "system", 0, null, "samples/sample-4.torrent"],
-    ["设计系统手册 (2024版) - PDF/EPUB", "书籍", 47185920, "45 MiB", "PDF,EPUB", "默认示例数据", 88, 2, 12, "2026-03-01 09:00:00", 0, 1, "system", 0, null, "samples/sample-5.torrent"],
+    ["[SubDesu] 咒术回战 - S2E14 [1080p] [HEVC]", "动画", 1503238554, "1.4 GiB", "1080p,HEVC", "默认示例数据", 2402, 124, 582, "2026-03-02 11:00:00", 1, 1, "system", 0, null, "samples/sample-1.torrent", "active", "2026-03-02 11:00:00"],
+    ["(Hi-Res) 宇多田光 - Science Fiction [FLAC 24bit/96kHz]", "音乐", 933232640, "890 MiB", "FLAC,Hi-Res", "默认示例数据", 156, 12, 45, "2026-03-02 08:00:00", 0, 1, "system", 0, null, "samples/sample-2.torrent", "active", "2026-03-02 08:00:00"],
+    ["奥本海默 (2023) [2160p] [4K] [HDR] [x265]", "电影", 19756849562, "18.4 GiB", "4K,HDR,x265", "默认示例数据", 5892, 845, 2100, "2026-03-01 23:00:00", 1, 1, "system", 0, null, "samples/sample-3.torrent", "active", "2026-03-01 23:00:00"],
+    ["博德之门 3 - 豪华版 [v4.1.1.3622274] + DLCs", "游戏", 130996502528, "122 GiB", "RPG,DLC", "默认示例数据", 1203, 450, 890, "2026-03-01 10:00:00", 0, 1, "system", 0, null, "samples/sample-4.torrent", "active", "2026-03-01 10:00:00"],
+    ["设计系统手册 (2024版) - PDF/EPUB", "书籍", 47185920, "45 MiB", "PDF,EPUB", "默认示例数据", 88, 2, 12, "2026-03-01 09:00:00", 0, 1, "system", 0, null, "samples/sample-5.torrent", "active", "2026-03-01 09:00:00"],
   ] as const;
 
   const stmt = db.query(`
     INSERT INTO torrents (
       name, category, size_bytes, size_display, tags, description,
       seeds, leechers, completed, created_at, is_trusted, is_free_download,
-      uploader_name, is_anonymous, uploader_user_id, file_path
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      uploader_name, is_anonymous, uploader_user_id, file_path, status, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   for (const row of seedRows) {
@@ -221,7 +345,8 @@ export function listTorrents(params: { q?: string; category?: string; limit?: nu
     .query(`
       SELECT *
       FROM torrents
-      WHERE ($q = '' OR name LIKE '%' || $q || '%' OR tags LIKE '%' || $q || '%')
+      WHERE status = 'active'
+        AND ($q = '' OR name LIKE '%' || $q || '%' OR tags LIKE '%' || $q || '%')
         AND ($category = '' OR category = $category)
       ORDER BY datetime(created_at) DESC, id DESC
       LIMIT $limit
@@ -231,12 +356,79 @@ export function listTorrents(params: { q?: string; category?: string; limit?: nu
   return rows as TorrentRow[];
 }
 
+export function listMyTorrents(userId: number) {
+  const rows = db
+    .query(`
+      SELECT *
+      FROM torrents
+      WHERE uploader_user_id = ?
+      ORDER BY datetime(created_at) DESC, id DESC
+      LIMIT 500
+    `)
+    .all(userId);
+
+  return rows as TorrentRow[];
+}
+
+export function listAdminTorrents(params: { q?: string; uploader?: string; status?: string } = {}) {
+  const q = params.q?.trim() ?? "";
+  const uploader = params.uploader?.trim() ?? "";
+  const status = params.status?.trim() ?? "";
+
+  const rows = db
+    .query(`
+      SELECT
+        t.*,
+        COALESCE(u.username, t.uploader_name) AS uploader_display
+      FROM torrents t
+      LEFT JOIN users u ON u.id = t.uploader_user_id
+      WHERE ($q = '' OR t.name LIKE '%' || $q || '%' OR t.tags LIKE '%' || $q || '%')
+        AND ($uploader = '' OR COALESCE(u.username, t.uploader_name) LIKE '%' || $uploader || '%')
+        AND ($status = '' OR t.status = $status)
+      ORDER BY datetime(t.created_at) DESC, t.id DESC
+      LIMIT 500
+    `)
+    .all({ $q: q, $uploader: uploader, $status: status });
+
+  return rows as Array<TorrentRow & { uploader_display: string }>;
+}
+
 export function getTorrentById(id: number) {
   const row = db.query("SELECT * FROM torrents WHERE id = ? LIMIT 1").get(id);
   return (row as TorrentRow | null) ?? null;
 }
 
+export function getTorrentByInfoHash(infoHash: string) {
+  const row = db.query("SELECT * FROM torrents WHERE info_hash = ? LIMIT 1").get(infoHash);
+  return (row as TorrentRow | null) ?? null;
+}
+
+export function getTorrentDetailById(id: number) {
+  const torrent = getTorrentById(id);
+  if (!torrent) {
+    return null;
+  }
+
+  const trackers = db
+    .query("SELECT * FROM torrent_trackers WHERE torrent_id = ? ORDER BY tier ASC, id ASC")
+    .all(id) as TorrentTrackerRow[];
+  const files = db
+    .query("SELECT * FROM torrent_files WHERE torrent_id = ? ORDER BY sort_order ASC, id ASC")
+    .all(id) as TorrentFileRow[];
+  const images = db
+    .query("SELECT * FROM torrent_images WHERE torrent_id = ? ORDER BY sort_order ASC, id ASC")
+    .all(id) as TorrentImageRow[];
+
+  return {
+    torrent,
+    trackers,
+    files,
+    images,
+  } as TorrentDetail;
+}
+
 export function insertTorrent(input: InsertTorrentInput) {
+  const now = new Date().toISOString();
   db.query(`
     INSERT INTO torrents (
       name,
@@ -250,7 +442,9 @@ export function insertTorrent(input: InsertTorrentInput) {
       uploader_user_id,
       file_path,
       is_trusted,
-      is_free_download
+      is_free_download,
+      status,
+      updated_at
     ) VALUES (
       $name,
       $category,
@@ -263,7 +457,9 @@ export function insertTorrent(input: InsertTorrentInput) {
       $uploaderUserId,
       $filePath,
       0,
-      1
+      1,
+      'active',
+      $updatedAt
     )
   `).run({
     $name: input.name,
@@ -276,7 +472,354 @@ export function insertTorrent(input: InsertTorrentInput) {
     $isAnonymous: input.isAnonymous ? 1 : 0,
     $uploaderUserId: input.uploaderUserId,
     $filePath: input.filePath,
+    $updatedAt: now,
   });
+}
+
+export function createTorrentWithMeta(input: CreateTorrentWithMetaInput) {
+  const now = new Date().toISOString();
+
+  const tx = db.transaction(() => {
+    db.query(`
+      INSERT INTO torrents (
+        name,
+        category,
+        size_bytes,
+        size_display,
+        tags,
+        description,
+        uploader_name,
+        is_anonymous,
+        uploader_user_id,
+        file_path,
+        is_trusted,
+        is_free_download,
+        info_hash,
+        magnet_uri,
+        status,
+        tracker_state,
+        tracker_source,
+        updated_at
+      ) VALUES (
+        $name,
+        $category,
+        $sizeBytes,
+        $sizeDisplay,
+        $tags,
+        $description,
+        $uploaderName,
+        $isAnonymous,
+        $uploaderUserId,
+        $filePath,
+        0,
+        1,
+        $infoHash,
+        $magnetUri,
+        'active',
+        'pending',
+        $trackerSource,
+        $updatedAt
+      )
+    `).run({
+      $name: input.name,
+      $category: input.category,
+      $sizeBytes: input.sizeBytes,
+      $sizeDisplay: input.sizeDisplay,
+      $tags: input.tags.join(","),
+      $description: input.description,
+      $uploaderName: input.uploaderName,
+      $isAnonymous: input.isAnonymous ? 1 : 0,
+      $uploaderUserId: input.uploaderUserId,
+      $filePath: input.filePath,
+      $infoHash: input.infoHash,
+      $magnetUri: input.magnetUri,
+      $trackerSource: input.trackers[0]?.announceUrl ?? "",
+      $updatedAt: now,
+    });
+
+    const row = db.query("SELECT last_insert_rowid() AS id").get() as { id: number };
+    const torrentId = row.id;
+
+    const trackerStmt = db.query(`
+      INSERT INTO torrent_trackers (
+        torrent_id, tier, announce_url, scrape_url, is_primary, last_checked_at, last_error
+      ) VALUES (?, ?, ?, ?, ?, NULL, '')
+    `);
+    input.trackers.forEach((tracker) => {
+      trackerStmt.run(
+        torrentId,
+        tracker.tier,
+        tracker.announceUrl,
+        tracker.scrapeUrl,
+        tracker.isPrimary ? 1 : 0,
+      );
+    });
+
+    const fileStmt = db.query(
+      "INSERT INTO torrent_files (torrent_id, file_path, file_size_bytes, sort_order) VALUES (?, ?, ?, ?)",
+    );
+    input.files.forEach((file, index) => {
+      fileStmt.run(torrentId, file.path, file.sizeBytes, index + 1);
+    });
+
+    const imageStmt = db.query(
+      "INSERT INTO torrent_images (torrent_id, image_path, sort_order, created_at) VALUES (?, ?, ?, ?)",
+    );
+    input.imagePaths.forEach((imagePath, index) => {
+      imageStmt.run(torrentId, imagePath, index + 1, now);
+    });
+
+    return torrentId;
+  });
+
+  return tx();
+}
+
+export function updateTorrentByOwner(
+  torrentId: number,
+  ownerUserId: number,
+  input: {
+    name: string;
+    tags: string[];
+    description: string;
+  },
+) {
+  const result = db.query(
+    "UPDATE torrents SET name = ?, tags = ?, description = ?, updated_at = ? WHERE id = ? AND uploader_user_id = ? AND status = 'active'",
+  ).run(input.name, input.tags.join(","), input.description, new Date().toISOString(), torrentId, ownerUserId);
+
+  return result.changes > 0;
+}
+
+export function updateTorrentAsAdmin(
+  torrentId: number,
+  input: {
+    name: string;
+    tags: string[];
+    description: string;
+  },
+) {
+  const result = db.query(
+    "UPDATE torrents SET name = ?, tags = ?, description = ?, updated_at = ? WHERE id = ?",
+  ).run(input.name, input.tags.join(","), input.description, new Date().toISOString(), torrentId);
+
+  return result.changes > 0;
+}
+
+export function addTorrentImages(torrentId: number, imagePaths: string[]) {
+  if (imagePaths.length === 0) {
+    return;
+  }
+
+  const row = db
+    .query("SELECT COALESCE(MAX(sort_order), 0) AS max_sort FROM torrent_images WHERE torrent_id = ?")
+    .get(torrentId) as { max_sort: number };
+
+  const start = row.max_sort ?? 0;
+  const now = new Date().toISOString();
+
+  const stmt = db.query(
+    "INSERT INTO torrent_images (torrent_id, image_path, sort_order, created_at) VALUES (?, ?, ?, ?)",
+  );
+  imagePaths.forEach((img, index) => {
+    stmt.run(torrentId, img, start + index + 1, now);
+  });
+}
+
+export function deleteTorrentImagesByIds(torrentId: number, imageIds: number[]) {
+  if (imageIds.length === 0) {
+    return;
+  }
+
+  const placeholders = imageIds.map(() => "?").join(",");
+  db.query(`DELETE FROM torrent_images WHERE torrent_id = ? AND id IN (${placeholders})`).run(
+    torrentId,
+    ...imageIds,
+  );
+}
+
+export function listTorrentImages(torrentId: number) {
+  return db
+    .query("SELECT * FROM torrent_images WHERE torrent_id = ? ORDER BY sort_order ASC, id ASC")
+    .all(torrentId) as TorrentImageRow[];
+}
+
+export function softDeleteTorrent(torrentId: number, deletedByUserId: number | null, mode: "user" | "admin") {
+  const status: TorrentStatus = mode === "admin" ? "deleted_admin" : "deleted_user";
+  const now = new Date().toISOString();
+
+  const result = db.query(
+    "UPDATE torrents SET status = ?, deleted_at = ?, deleted_by_user_id = ?, updated_at = ? WHERE id = ? AND status = 'active'",
+  ).run(status, now, deletedByUserId, now, torrentId);
+
+  return result.changes > 0;
+}
+
+export function listDeletedTorrentCleanupCandidates(retentionDays: number) {
+  const rows = db
+    .query(
+      "SELECT id, file_path, deleted_at FROM torrents WHERE status IN ('deleted_user', 'deleted_admin') AND deleted_at IS NOT NULL AND datetime(deleted_at) <= datetime('now', '-' || $days || ' day')",
+    )
+    .all({ $days: retentionDays });
+
+  return rows as Array<{ id: number; file_path: string; deleted_at: string }>;
+}
+
+export function markTorrentAssetsCleaned(torrentId: number) {
+  db.query("UPDATE torrents SET file_path = '' WHERE id = ?").run(torrentId);
+  db.query("DELETE FROM torrent_images WHERE torrent_id = ?").run(torrentId);
+}
+
+export function getTorrentsNeedingMetaBackfill(limit = 200) {
+  const rows = db
+    .query(
+      "SELECT * FROM torrents WHERE status = 'active' AND file_path != '' AND (info_hash IS NULL OR info_hash = '' OR magnet_uri IS NULL OR magnet_uri = '') ORDER BY id ASC LIMIT ?",
+    )
+    .all(limit);
+
+  return rows as TorrentRow[];
+}
+
+export function upsertTorrentMetaForExisting(
+  torrentId: number,
+  input: {
+    infoHash: string;
+    magnetUri: string;
+    trackers: Array<{
+      tier: number;
+      announceUrl: string;
+      scrapeUrl: string;
+      isPrimary: boolean;
+    }>;
+    files: Array<{
+      path: string;
+      sizeBytes: number;
+    }>;
+  },
+) {
+  const now = new Date().toISOString();
+
+  const tx = db.transaction(() => {
+    db.query(
+      "UPDATE torrents SET info_hash = ?, magnet_uri = ?, tracker_source = ?, updated_at = ? WHERE id = ?",
+    ).run(input.infoHash, input.magnetUri, input.trackers[0]?.announceUrl ?? "", now, torrentId);
+
+    db.query("DELETE FROM torrent_trackers WHERE torrent_id = ?").run(torrentId);
+    db.query("DELETE FROM torrent_files WHERE torrent_id = ?").run(torrentId);
+
+    const trackerStmt = db.query(
+      "INSERT INTO torrent_trackers (torrent_id, tier, announce_url, scrape_url, is_primary, last_checked_at, last_error) VALUES (?, ?, ?, ?, ?, NULL, '')",
+    );
+    input.trackers.forEach((tracker) => {
+      trackerStmt.run(
+        torrentId,
+        tracker.tier,
+        tracker.announceUrl,
+        tracker.scrapeUrl,
+        tracker.isPrimary ? 1 : 0,
+      );
+    });
+
+    const fileStmt = db.query(
+      "INSERT INTO torrent_files (torrent_id, file_path, file_size_bytes, sort_order) VALUES (?, ?, ?, ?)",
+    );
+    input.files.forEach((file, index) => {
+      fileStmt.run(torrentId, file.path, file.sizeBytes, index + 1);
+    });
+  });
+
+  tx();
+}
+
+export function listTrackersByTorrentId(torrentId: number) {
+  return db
+    .query("SELECT * FROM torrent_trackers WHERE torrent_id = ? ORDER BY tier ASC, id ASC")
+    .all(torrentId) as TorrentTrackerRow[];
+}
+
+export function listTrackerRefreshCandidates(limit = 60) {
+  const rows = db
+    .query(`
+      SELECT
+        id,
+        name,
+        info_hash,
+        seeds,
+        leechers,
+        created_at,
+        tracker_last_checked_at
+      FROM torrents
+      WHERE status = 'active'
+        AND info_hash IS NOT NULL
+        AND info_hash != ''
+      ORDER BY
+        CASE
+          WHEN tracker_last_checked_at IS NULL THEN 0
+          WHEN datetime(created_at) >= datetime('now', '-1 day') THEN 1
+          WHEN (seeds + leechers) >= 50 THEN 2
+          ELSE 3
+        END ASC,
+        datetime(COALESCE(tracker_last_checked_at, '1970-01-01T00:00:00Z')) ASC,
+        id DESC
+      LIMIT $limit
+    `)
+    .all({ $limit: limit }) as Array<{
+      id: number;
+      name: string;
+      info_hash: string;
+      seeds: number;
+      leechers: number;
+      created_at: string;
+      tracker_last_checked_at: string | null;
+    }>;
+
+  return rows.map((row) => ({
+    ...row,
+    trackers: listTrackersByTorrentId(row.id),
+  }));
+}
+
+export function updateTorrentTrackerSnapshot(
+  torrentId: number,
+  input: {
+    seeds: number;
+    leechers: number;
+    completed: number;
+    trackerSource: string;
+    trackerState: "ok" | "error" | "unsupported";
+    trackerError?: string;
+  },
+) {
+  const now = new Date().toISOString();
+
+  db.query(
+    "UPDATE torrents SET seeds = ?, leechers = ?, completed = ?, tracker_last_checked_at = ?, tracker_source = ?, tracker_state = ?, updated_at = ? WHERE id = ?",
+  ).run(
+    input.seeds,
+    input.leechers,
+    input.completed,
+    now,
+    input.trackerSource,
+    input.trackerState,
+    now,
+    torrentId,
+  );
+
+  db.query(
+    "UPDATE torrent_trackers SET last_checked_at = ?, last_error = ? WHERE torrent_id = ? AND announce_url = ?",
+  ).run(now, input.trackerError ?? "", torrentId, input.trackerSource);
+}
+
+export function markTorrentTrackerError(torrentId: number, trackerSource: string, error: string, state = "error") {
+  const now = new Date().toISOString();
+
+  db.query(
+    "UPDATE torrents SET tracker_last_checked_at = ?, tracker_source = ?, tracker_state = ?, updated_at = ? WHERE id = ?",
+  ).run(now, trackerSource, state, now, torrentId);
+
+  db.query(
+    "UPDATE torrent_trackers SET last_checked_at = ?, last_error = ? WHERE torrent_id = ? AND announce_url = ?",
+  ).run(now, error.slice(0, 200), torrentId, trackerSource);
 }
 
 export function createUser(input: {
@@ -446,29 +989,77 @@ export function deleteExpiredSessions() {
   db.query("DELETE FROM sessions WHERE datetime(expires_at) <= datetime('now')").run();
 }
 
-export function getSiteBranding(): SiteBranding {
+export function getSiteSettings(): SiteSettings {
   const row = db
-    .query("SELECT title_text AS titleText, logo_path AS logoPath FROM site_settings WHERE id = 1")
-    .get() as SiteBranding | null;
+    .query(
+      "SELECT title_text AS titleText, logo_path AS logoPath, allow_guest_upload AS allowGuestUpload, allow_user_delete_torrent AS allowUserDeleteTorrent FROM site_settings WHERE id = 1",
+    )
+    .get() as
+    | {
+        titleText: string;
+        logoPath: string;
+        allowGuestUpload: number;
+        allowUserDeleteTorrent: number;
+      }
+    | null;
 
   if (!row) {
-    return { titleText: "Sukebei.dl", logoPath: "" };
+    return {
+      titleText: "Sukebei.dl",
+      logoPath: "",
+      allowGuestUpload: true,
+      allowUserDeleteTorrent: true,
+    };
   }
-  return row;
+
+  return {
+    titleText: row.titleText,
+    logoPath: row.logoPath,
+    allowGuestUpload: row.allowGuestUpload === 1,
+    allowUserDeleteTorrent: row.allowUserDeleteTorrent === 1,
+  };
 }
 
-export function updateSiteBranding(input: { titleText: string; logoPath?: string }) {
-  if (typeof input.logoPath === "string") {
-    db.query("UPDATE site_settings SET title_text = ?, logo_path = ?, updated_at = ? WHERE id = 1").run(
-      input.titleText,
-      input.logoPath,
-      new Date().toISOString(),
-    );
-    return;
-  }
+export function getSiteBranding(): SiteBranding {
+  const s = getSiteSettings();
+  return {
+    titleText: s.titleText,
+    logoPath: s.logoPath,
+  };
+}
 
-  db.query("UPDATE site_settings SET title_text = ?, updated_at = ? WHERE id = 1").run(
-    input.titleText,
+export function getSiteFeatureFlags(): SiteFeatureFlags {
+  const s = getSiteSettings();
+  return {
+    allowGuestUpload: s.allowGuestUpload,
+    allowUserDeleteTorrent: s.allowUserDeleteTorrent,
+  };
+}
+
+export function updateSiteBranding(input: {
+  titleText: string;
+  logoPath?: string;
+  allowGuestUpload?: boolean;
+  allowUserDeleteTorrent?: boolean;
+}) {
+  const current = getSiteSettings();
+
+  const titleText = input.titleText;
+  const logoPath = typeof input.logoPath === "string" ? input.logoPath : current.logoPath;
+  const allowGuestUpload =
+    typeof input.allowGuestUpload === "boolean" ? input.allowGuestUpload : current.allowGuestUpload;
+  const allowUserDeleteTorrent =
+    typeof input.allowUserDeleteTorrent === "boolean"
+      ? input.allowUserDeleteTorrent
+      : current.allowUserDeleteTorrent;
+
+  db.query(
+    "UPDATE site_settings SET title_text = ?, logo_path = ?, allow_guest_upload = ?, allow_user_delete_torrent = ?, updated_at = ? WHERE id = 1",
+  ).run(
+    titleText,
+    logoPath,
+    allowGuestUpload ? 1 : 0,
+    allowUserDeleteTorrent ? 1 : 0,
     new Date().toISOString(),
   );
 }

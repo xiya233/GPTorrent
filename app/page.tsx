@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Download, Link2 } from "lucide-react";
+import { Download } from "lucide-react";
+import { MagnetCopyButton } from "@/components/magnet-copy-button";
 import { listTorrents, type TorrentRow } from "@/lib/db";
 
 type HomePageProps = {
@@ -18,7 +19,10 @@ const badgeClass: Record<string, string> = {
   软件: "badge-indigo",
 };
 
-function formatRelativeTime(value: string) {
+function formatRelativeTime(value: string | null) {
+  if (!value) {
+    return "刚刚";
+  }
   const date = new Date(value.includes("T") ? value : value.replace(" ", "T"));
   const diffMs = Date.now() - date.getTime();
   const hour = 60 * 60 * 1000;
@@ -44,6 +48,11 @@ function renderTags(row: TorrentRow) {
     <div className="tag-list">
       <span className="small-tag">免费下载</span>
       {row.is_trusted ? <span className="small-tag trusted">信任种子</span> : null}
+      {row.tracker_last_checked_at ? (
+        <span className="small-tag">抓取: {formatRelativeTime(row.tracker_last_checked_at)}</span>
+      ) : (
+        <span className="small-tag">抓取: 待更新</span>
+      )}
       {tags.map((tag) => (
         <span className="small-tag" key={tag}>
           {tag}
@@ -115,7 +124,9 @@ export default async function Home({ searchParams }: HomePageProps) {
                     </td>
                     <td>
                       <div className="torrent-name-wrap">
-                        <strong>{row.name}</strong>
+                        <strong>
+                          <Link href={`/torrent/${row.id}`}>{row.name}</Link>
+                        </strong>
                         {renderTags(row)}
                       </div>
                     </td>
@@ -125,9 +136,7 @@ export default async function Home({ searchParams }: HomePageProps) {
                         <a aria-label="下载" className="icon-button tiny" href={`/download/${row.id}`}>
                           <Download size={16} />
                         </a>
-                        <button aria-label="复制链接" className="icon-button tiny" type="button">
-                          <Link2 size={16} />
-                        </button>
+                        <MagnetCopyButton magnetUri={row.magnet_uri} />
                       </div>
                     </td>
                     <td className="align-right muted">{row.size_display}</td>

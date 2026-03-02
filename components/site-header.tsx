@@ -40,6 +40,11 @@ export async function SiteHeader() {
               账号设置
             </Link>
           ) : null}
+          {user ? (
+            <Link className="nav-link" href="/my/torrents">
+              我的种子
+            </Link>
+          ) : null}
           {user?.role === "admin" ? (
             <Link className="nav-link" href="/admin">
               管理后台

@@ -8,9 +8,11 @@ import {
 
 type SiteFormProps = {
   titleText: string;
+  allowGuestUpload: boolean;
+  allowUserDeleteTorrent: boolean;
 };
 
-export function SiteForm({ titleText }: SiteFormProps) {
+export function SiteForm({ titleText, allowGuestUpload, allowUserDeleteTorrent }: SiteFormProps) {
   const initialState: AdminSiteActionState = {
     error: null,
     success: null,
@@ -35,6 +37,27 @@ export function SiteForm({ titleText }: SiteFormProps) {
         <input accept="image/jpeg,image/png,image/webp,image/svg+xml" id="logoFile" name="logoFile" type="file" />
         <small>支持 jpg/png/webp/svg，最大 2MB</small>
       </div>
+
+      <label className="checkbox-row" htmlFor="allowGuestUpload">
+        <input defaultChecked={allowGuestUpload} id="allowGuestUpload" name="allowGuestUpload" type="checkbox" />
+        <span>
+          <strong>允许访客上传</strong>
+          <small>关闭后，未登录用户将不能上传种子。</small>
+        </span>
+      </label>
+
+      <label className="checkbox-row" htmlFor="allowUserDeleteTorrent">
+        <input
+          defaultChecked={allowUserDeleteTorrent}
+          id="allowUserDeleteTorrent"
+          name="allowUserDeleteTorrent"
+          type="checkbox"
+        />
+        <span>
+          <strong>允许用户删除自己的种子</strong>
+          <small>关闭后，仅管理员可删除种子。</small>
+        </span>
+      </label>
 
       {state.error ? <p className="form-error">{state.error}</p> : null}
       {state.success ? <p className="form-success">{state.success}</p> : null}

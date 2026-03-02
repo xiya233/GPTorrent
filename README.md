@@ -2,10 +2,13 @@
 
 基于 Stitch 设计稿实现，当前能力：
 - 首页（种子列表，支持搜索/分类）
-- 上传页（游客匿名上传 + 登录用户可实名/匿名上传）
+- 上传页（游客上传可开关、登录用户实名/匿名上传）
 - 用户系统（注册、登录、登出、会话）
 - 个人设置（头像、bio、修改密码）
-- 管理员面板（用户管理 + 站点 LOGO/标题配置）
+- 管理员面板（用户管理、站点 LOGO/标题、功能开关）
+- 种子详情页（描述、图片、文件列表、tracker统计）
+- 我的种子（编辑标题/标签/描述/图片、删除）
+- 管理员种子管理（查看全站种子并删除任意记录）
 
 技术栈：
 - Next.js App Router + Server Actions
@@ -44,9 +47,34 @@ export ADMIN_PASSWORD='Admin1234'
 
 应用启动时若该用户不存在，将自动创建管理员账号。
 
+## Tracker Worker
+
+```bash
+mise exec bun -- bun run tracker:worker
+```
+
+建议使用 `systemd/pm2/supervisor` 守护该进程。
+
+## 元数据补全与清理脚本
+
+```bash
+# 为历史种子补齐 infohash/magnet/文件列表/tracker
+mise exec bun -- bun run torrents:backfill
+
+# 清理软删除后超过保留期(默认7天)的文件资源
+mise exec bun -- bun run torrents:cleanup
+```
+
+可通过环境变量设置清理保留天数：
+
+```bash
+export TORRENT_CLEANUP_RETENTION_DAYS=7
+```
+
 ## 目录说明
 
 - 数据库文件：`data/btshare.sqlite`
 - 种子文件：`data/uploads/`
+- 种子图片：`data/torrent-images/`
 - 头像文件：`data/avatars/`
-- 站点LOGO：`data/site/`
+- 站点 LOGO：`data/site/`
