@@ -8,11 +8,17 @@ const initialState: UploadActionState = {
   error: null,
 };
 
-export function UploadForm() {
+type UploadFormProps = {
+  isLoggedIn: boolean;
+};
+
+export function UploadForm({ isLoggedIn }: UploadFormProps) {
   const [state, formAction, isPending] = useActionState(uploadTorrentAction, initialState);
 
   return (
     <form action={formAction} className="upload-form">
+      {!isLoggedIn ? <p className="hint-text">当前为游客上传，发布者会显示为“匿名用户”。</p> : null}
+
       <div className="field-group">
         <label htmlFor="torrentFile">种子文件</label>
         <label className="dropzone" htmlFor="torrentFile">
@@ -58,13 +64,17 @@ export function UploadForm() {
           <small>可以使用 Markdown 进行格式化。</small>
         </div>
 
-        <label className="checkbox-row span-2" htmlFor="anonymous">
-          <input id="anonymous" name="anonymous" type="checkbox" />
-          <span>
-            <strong>匿名上传</strong>
-            <small>上传后将不显示您的用户名。</small>
-          </span>
-        </label>
+        {isLoggedIn ? (
+          <label className="checkbox-row span-2" htmlFor="anonymous">
+            <input id="anonymous" name="anonymous" type="checkbox" />
+            <span>
+              <strong>匿名上传</strong>
+              <small>上传后将不显示您的用户名。</small>
+            </span>
+          </label>
+        ) : (
+          <input name="anonymous" type="hidden" value="on" />
+        )}
       </div>
 
       {state.error ? <p className="form-error">{state.error}</p> : null}

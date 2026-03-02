@@ -1,11 +1,10 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { getCurrentUserState } from "@/lib/auth";
 import { insertTorrent } from "@/lib/db";
+import { formatBytes, saveUploadedFile } from "@/lib/storage";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
@@ -21,27 +20,20 @@ function normalizeTags(input: string) {
     .slice(0, 12);
 }
 
-function formatSize(sizeBytes: number) {
-  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
-  let size = sizeBytes;
-  let unitIndex = 0;
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024;
-    unitIndex += 1;
-  }
-  const precision = unitIndex <= 1 ? 0 : 1;
-  return `${size.toFixed(precision)} ${units[unitIndex]}`;
-}
-
 export async function uploadTorrentAction(
   _prevState: UploadActionState,
   formData: FormData,
 ): Promise<UploadActionState> {
+  const { user, blocked } = await getCurrentUserState();
+  if (blocked) {
+    redirect("/auth/login");
+  }
+
   const name = (formData.get("name") as string | null)?.trim() ?? "";
   const category = (formData.get("category") as string | null)?.trim() ?? "";
   const tagsRaw = (formData.get("tags") as string | null)?.trim() ?? "";
   const description = (formData.get("description") as string | null)?.trim() ?? "";
-  const isAnonymous = formData.get("anonymous") === "on";
+  const isAnonymousInput = formData.get("anonymous") === "on";
   const file = formData.get("torrentFile");
 
   if (!name) {
@@ -56,34 +48,31 @@ export async function uploadTorrentAction(
   if (!(file instanceof File)) {
     return { error: "请上传 .torrent 文件" };
   }
-  if (!file.name.toLowerCase().endsWith(".torrent")) {
-    return { error: "文件扩展名必须是 .torrent" };
+
+  const saved = await saveUploadedFile({
+    file,
+    dir: "uploads",
+    maxBytes: MAX_FILE_SIZE,
+    allowedExts: [".torrent"],
+  });
+
+  if (!saved.ok) {
+    return { error: saved.error };
   }
-  if (file.size <= 0 || file.size > MAX_FILE_SIZE) {
-    return { error: "文件大小必须在 1B 到 10MB 之间" };
-  }
 
-  const uploadsDir = path.join(process.cwd(), "data", "uploads");
-  await mkdir(uploadsDir, { recursive: true });
-
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-");
-  const storedFileName = `${Date.now()}-${randomUUID()}-${safeName}`;
-  const relativePath = path.join("uploads", storedFileName);
-  const absolutePath = path.join(process.cwd(), "data", relativePath);
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-  await writeFile(absolutePath, buffer);
+  const isAnonymous = user ? isAnonymousInput : true;
 
   insertTorrent({
     name,
     category,
     sizeBytes: file.size,
-    sizeDisplay: formatSize(file.size),
+    sizeDisplay: formatBytes(file.size),
     tags: normalizeTags(tagsRaw),
     description,
-    uploaderName: "访客",
+    uploaderName: user ? user.username : "访客",
+    uploaderUserId: user?.id ?? null,
     isAnonymous,
-    filePath: relativePath,
+    filePath: saved.relativePath,
   });
 
   revalidatePath("/");

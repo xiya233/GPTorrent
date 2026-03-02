@@ -18,4 +18,8 @@ coverage
 .DS_Store
 
 data/btshare.sqlite
+data/btshare.sqlite-shm
+data/btshare.sqlite-wal
 data/uploads
+data/avatars
+data/site

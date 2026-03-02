@@ -2,12 +2,15 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { getSiteBranding } from "@/lib/db";
 import "./globals.css";
 
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-display",
 });
+
+export const dynamic = "force-dynamic";
 
 const themeScript = `
 (function() {
@@ -21,10 +24,13 @@ const themeScript = `
 })();
 `;
 
-export const metadata: Metadata = {
-  title: "Sukebei.dl - BT 种子分享",
-  description: "基于 Next.js App Router + Server Actions + SQLite 的 BT 种子分享网站",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const branding = getSiteBranding();
+  return {
+    title: branding.titleText,
+    description: "基于 Next.js App Router + Server Actions + SQLite 的 BT 种子分享网站",
+  };
+}
 
 export default function RootLayout({
   children,

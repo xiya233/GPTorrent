@@ -19,12 +19,12 @@ const badgeClass: Record<string, string> = {
 };
 
 function formatRelativeTime(value: string) {
-  const date = new Date(value.replace(" ", "T"));
+  const date = new Date(value.includes("T") ? value : value.replace(" ", "T"));
   const diffMs = Date.now() - date.getTime();
   const hour = 60 * 60 * 1000;
   const day = 24 * hour;
 
-  if (diffMs < hour) {
+  if (Number.isNaN(date.getTime()) || diffMs < hour) {
     return "刚刚";
   }
   if (diffMs < day) {
@@ -51,6 +51,13 @@ function renderTags(row: TorrentRow) {
       ))}
     </div>
   );
+}
+
+function getUploaderName(row: TorrentRow) {
+  if (row.is_anonymous === 1) {
+    return "匿名用户";
+  }
+  return row.uploader_name || "访客";
 }
 
 export default async function Home({ searchParams }: HomePageProps) {
@@ -82,6 +89,7 @@ export default async function Home({ searchParams }: HomePageProps) {
               <tr>
                 <th>类型</th>
                 <th>名称</th>
+                <th>发布者</th>
                 <th className="align-center">下载</th>
                 <th className="align-right">大小</th>
                 <th className="align-right">日期</th>
@@ -93,7 +101,7 @@ export default async function Home({ searchParams }: HomePageProps) {
             <tbody>
               {torrents.length === 0 ? (
                 <tr>
-                  <td className="empty-row" colSpan={8}>
+                  <td className="empty-row" colSpan={9}>
                     没有匹配的种子
                   </td>
                 </tr>
@@ -111,6 +119,7 @@ export default async function Home({ searchParams }: HomePageProps) {
                         {renderTags(row)}
                       </div>
                     </td>
+                    <td className="muted uploader-name">{getUploaderName(row)}</td>
                     <td className="align-center">
                       <div className="action-icons">
                         <button aria-label="下载" className="icon-button tiny" type="button">

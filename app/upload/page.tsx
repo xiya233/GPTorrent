@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { CircleAlert } from "lucide-react";
+import { redirect } from "next/navigation";
 import { UploadForm } from "@/app/upload/upload-form";
+import { getCurrentUserState } from "@/lib/auth";
 
 const uploadRules = [
   "请确保您拥有分发所上传内容的权利。",
@@ -9,7 +11,12 @@ const uploadRules = [
   "截图和详细描述有助于用户验证内容。",
 ];
 
-export default function UploadPage() {
+export default async function UploadPage() {
+  const { user, blocked } = await getCurrentUserState();
+  if (blocked) {
+    redirect("/auth/login");
+  }
+
   return (
     <div className="container page-content upload-page">
       <div className="page-heading-row">
@@ -20,7 +27,7 @@ export default function UploadPage() {
       </div>
 
       <section className="card">
-        <UploadForm />
+        <UploadForm isLoggedIn={Boolean(user)} />
       </section>
 
       <section className="card rules-card">

@@ -1,38 +1,50 @@
-"use client";
-
+import Image from "next/image";
 import Link from "next/link";
 import { Search } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { logoutAction } from "@/app/auth/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { getCurrentUser } from "@/lib/auth";
+import { getSiteBranding } from "@/lib/db";
+import { toMediaUrl } from "@/lib/media-url";
 
 const categories = ["", "动画", "电影", "电视剧", "音乐", "游戏", "软件", "书籍"];
 
-export function SiteHeader() {
-  const pathname = usePathname();
+export async function SiteHeader() {
+  const [user, branding] = await Promise.all([getCurrentUser(), Promise.resolve(getSiteBranding())]);
+  const logoUrl = toMediaUrl(branding.logoPath);
+  const avatarUrl = user ? toMediaUrl(user.avatar_path) : "";
 
   return (
     <header className="site-header">
       <div className="container header-inner">
         <div className="brand-wrap">
-          <span className="brand-dot" />
+          {logoUrl ? (
+            <Image alt="site logo" className="header-logo" height={24} src={logoUrl} unoptimized width={24} />
+          ) : (
+            <span className="brand-dot" />
+          )}
           <Link className="brand" href="/">
-            Sukebei<span>.dl</span>
+            {branding.titleText}
           </Link>
         </div>
 
         <nav className="top-nav">
-          <Link className={pathname === "/" ? "nav-link active" : "nav-link"} href="/">
+          <Link className="nav-link" href="/">
             种子
           </Link>
-          <Link className={pathname === "/upload" ? "nav-link active" : "nav-link"} href="/upload">
+          <Link className="nav-link" href="/upload">
             上传
           </Link>
-          <a className="nav-link" href="#">
-            论坛
-          </a>
-          <a className="nav-link" href="#">
-            规则
-          </a>
+          {user ? (
+            <Link className="nav-link" href="/settings/profile">
+              账号设置
+            </Link>
+          ) : null}
+          {user?.role === "admin" ? (
+            <Link className="nav-link" href="/admin">
+              管理后台
+            </Link>
+          ) : null}
         </nav>
 
         <form action="/" className="search-bar" method="GET">
@@ -48,7 +60,38 @@ export function SiteHeader() {
           </select>
         </form>
 
-        <ThemeToggle />
+        <div className="header-actions">
+          <ThemeToggle />
+
+          {user ? (
+            <>
+              <div className="mini-user">
+                <div className="mini-avatar">
+                  {avatarUrl ? (
+                    <Image alt={`${user.username} avatar`} fill sizes="32px" src={avatarUrl} unoptimized />
+                  ) : (
+                    <span>{user.username.slice(0, 1).toUpperCase()}</span>
+                  )}
+                </div>
+                <span>{user.username}</span>
+              </div>
+              <form action={logoutAction}>
+                <button className="secondary-btn tiny-btn" type="submit">
+                  登出
+                </button>
+              </form>
+            </>
+          ) : (
+            <div className="auth-links">
+              <Link className="secondary-btn tiny-btn" href="/auth/login">
+                登录
+              </Link>
+              <Link className="primary-btn tiny-btn" href="/auth/register">
+                注册
+              </Link>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );
