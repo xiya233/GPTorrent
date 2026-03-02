@@ -231,6 +231,11 @@ export function listTorrents(params: { q?: string; category?: string; limit?: nu
   return rows as TorrentRow[];
 }
 
+export function getTorrentById(id: number) {
+  const row = db.query("SELECT * FROM torrents WHERE id = ? LIMIT 1").get(id);
+  return (row as TorrentRow | null) ?? null;
+}
+
 export function insertTorrent(input: InsertTorrentInput) {
   db.query(`
     INSERT INTO torrents (

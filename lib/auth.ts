@@ -13,6 +13,8 @@ import {
 const COOKIE_NAME = "bt_session";
 const SESSION_TTL_DAYS = 30;
 
+export const SESSION_COOKIE_NAME = COOKIE_NAME;
+
 function hashSessionToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -69,9 +71,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   return state.user;
 }
 
-export async function getCurrentUserState(): Promise<{ user: AuthUser | null; blocked: boolean }> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(COOKIE_NAME)?.value;
+export function getUserStateFromToken(token?: string | null) {
   if (!token) {
     return { user: null, blocked: false };
   }
@@ -79,14 +79,12 @@ export async function getCurrentUserState(): Promise<{ user: AuthUser | null; bl
   const tokenHash = hashSessionToken(token);
   const session = getSessionWithUserByTokenHash(tokenHash);
   if (!session) {
-    await clearSessionCookie();
     return { user: null, blocked: false };
   }
 
   const expired = new Date(session.expires_at).getTime() <= Date.now();
   if (expired || session.status !== "active") {
     deleteSessionByTokenHash(tokenHash);
-    await clearSessionCookie();
     return { user: null, blocked: session.status !== "active" };
   }
 
@@ -101,6 +99,16 @@ export async function getCurrentUserState(): Promise<{ user: AuthUser | null; bl
     },
     blocked: false,
   };
+}
+
+export async function getCurrentUserState(): Promise<{ user: AuthUser | null; blocked: boolean }> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(COOKIE_NAME)?.value;
+  const state = getUserStateFromToken(token);
+  if (!state.user && token) {
+    await clearSessionCookie();
+  }
+  return state;
 }
 
 export async function requireActiveUser() {

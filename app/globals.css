@@ -478,6 +478,79 @@ tbody tr:last-child td {
   cursor: pointer;
 }
 
+.selected-file-wrap {
+  width: 100%;
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+}
+
+.selected-file-name {
+  margin: 0;
+  max-width: 100%;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selected-file-meta {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.clear-file-btn {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.upload-progress-wrap {
+  margin-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.upload-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.upload-progress-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+}
+
+.upload-progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2563eb, #22c55e);
+  transition: width 0.12s linear;
+}
+
+.upload-speed {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
 .field-grid {
   margin-top: 18px;
   display: grid;

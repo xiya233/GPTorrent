@@ -122,9 +122,9 @@ export default async function Home({ searchParams }: HomePageProps) {
                     <td className="muted uploader-name">{getUploaderName(row)}</td>
                     <td className="align-center">
                       <div className="action-icons">
-                        <button aria-label="下载" className="icon-button tiny" type="button">
+                        <a aria-label="下载" className="icon-button tiny" href={`/download/${row.id}`}>
                           <Download size={16} />
-                        </button>
+                        </a>
                         <button aria-label="复制链接" className="icon-button tiny" type="button">
                           <Link2 size={16} />
                         </button>
