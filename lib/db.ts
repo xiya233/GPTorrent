@@ -39,6 +39,7 @@ export type TorrentRow = {
   tracker_state: string;
   deleted_at: string | null;
   deleted_by_user_id: number | null;
+  assets_cleaned_at: string | null;
 };
 
 export type TorrentTrackerRow = {
@@ -251,6 +252,7 @@ ensureColumn("torrents", "tracker_source", "ALTER TABLE torrents ADD COLUMN trac
 ensureColumn("torrents", "tracker_state", "ALTER TABLE torrents ADD COLUMN tracker_state TEXT NOT NULL DEFAULT 'pending'");
 ensureColumn("torrents", "deleted_at", "ALTER TABLE torrents ADD COLUMN deleted_at TEXT");
 ensureColumn("torrents", "deleted_by_user_id", "ALTER TABLE torrents ADD COLUMN deleted_by_user_id INTEGER");
+ensureColumn("torrents", "assets_cleaned_at", "ALTER TABLE torrents ADD COLUMN assets_cleaned_at TEXT");
 ensureColumn("torrents", "updated_at", "ALTER TABLE torrents ADD COLUMN updated_at TEXT");
 ensureColumn(
   "site_settings",
@@ -649,24 +651,43 @@ export function softDeleteTorrent(torrentId: number, deletedByUserId: number | n
   const now = new Date().toISOString();
 
   const result = db.query(
-    "UPDATE torrents SET status = ?, deleted_at = ?, deleted_by_user_id = ?, updated_at = ? WHERE id = ? AND status = 'active'",
+    "UPDATE torrents SET status = ?, deleted_at = ?, deleted_by_user_id = ?, assets_cleaned_at = NULL, updated_at = ? WHERE id = ? AND status = 'active'",
   ).run(status, now, deletedByUserId, now, torrentId);
 
   return result.changes > 0;
 }
 
 export function listDeletedTorrentCleanupCandidates(retentionDays: number) {
+  const safeDays = Number.isFinite(retentionDays) && retentionDays >= 0 ? Math.floor(retentionDays) : 0;
+  const cutoffIso = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000).toISOString();
+
   const rows = db
     .query(
-      "SELECT id, file_path, deleted_at FROM torrents WHERE status IN ('deleted_user', 'deleted_admin') AND deleted_at IS NOT NULL AND datetime(deleted_at) <= datetime('now', '-' || $days || ' day')",
+      `
+      SELECT id, file_path, deleted_at
+      FROM torrents
+      WHERE status IN ('deleted_user', 'deleted_admin')
+        AND deleted_at IS NOT NULL
+        AND deleted_at <= $cutoffIso
+        AND assets_cleaned_at IS NULL
+        AND (
+          file_path != ''
+          OR EXISTS (SELECT 1 FROM torrent_images WHERE torrent_id = torrents.id)
+        )
+      `,
     )
-    .all({ $days: retentionDays });
+    .all({ $cutoffIso: cutoffIso });
 
   return rows as Array<{ id: number; file_path: string; deleted_at: string }>;
 }
 
 export function markTorrentAssetsCleaned(torrentId: number) {
-  db.query("UPDATE torrents SET file_path = '' WHERE id = ?").run(torrentId);
+  const now = new Date().toISOString();
+  db.query("UPDATE torrents SET file_path = '', assets_cleaned_at = ?, updated_at = ? WHERE id = ?").run(
+    now,
+    now,
+    torrentId,
+  );
   db.query("DELETE FROM torrent_images WHERE torrent_id = ?").run(torrentId);
 }
 
