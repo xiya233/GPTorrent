@@ -16,6 +16,51 @@ type ScrapeResult = {
   trackerSource: string;
 };
 
+export type TrackerRefreshEvent =
+  | {
+      type: "candidate_start";
+      torrentId: number;
+      name: string;
+      infoHash: string;
+      trackerCount: number;
+    }
+  | {
+      type: "tracker_try";
+      torrentId: number;
+      name: string;
+      announceUrl: string;
+      attempt: number;
+    }
+  | {
+      type: "tracker_fail";
+      torrentId: number;
+      name: string;
+      announceUrl: string;
+      attempt: number;
+      message: string;
+    }
+  | {
+      type: "candidate_success";
+      torrentId: number;
+      name: string;
+      announceUrl: string;
+      seeds: number;
+      leechers: number;
+      completed: number;
+    }
+  | {
+      type: "candidate_fail";
+      torrentId: number;
+      name: string;
+      reason: "failed" | "unsupported";
+      message: string;
+    };
+
+type RefreshTrackerBatchOptions = {
+  maxAttempts?: number;
+  onEvent?: (event: TrackerRefreshEvent) => void;
+};
+
 function timeoutPromise<T>(promise: Promise<T>, ms: number, message: string) {
   let timer: ReturnType<typeof setTimeout> | null = null;
   const timeout = new Promise<never>((_, reject) => {
@@ -66,6 +111,39 @@ function buildHttpScrapeUrlFromAnnounce(announceUrl: string) {
   }
 
   return `${announceUrl.slice(0, idx)}/scrape${announceUrl.slice(idx + "/announce".length)}`;
+}
+
+function toUdpFallbackTracker(tracker: TorrentTrackerRow): TorrentTrackerRow | null {
+  if (!/^https?:\/\//i.test(tracker.announce_url)) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(tracker.announce_url);
+    const port = parsed.port ? Number(parsed.port) : parsed.protocol === "https:" ? 443 : 80;
+
+    // UDP fallback is only meaningful for announce-like tracker ports.
+    if (!Number.isFinite(port) || port <= 0 || port > 65535) {
+      return null;
+    }
+
+    // Most trackers exposing UDP use explicit tracker port such as 6969/2710/1337.
+    // For plain web ports we skip aggressive fallback to avoid noisy failures.
+    if (!parsed.port && (port === 80 || port === 443)) {
+      return null;
+    }
+
+    const udpAnnounce = `udp://${parsed.hostname}:${port}${parsed.pathname || "/announce"}`;
+    const udpScrape = udpAnnounce.replace(/\/announce(?=$|[/?#])/, "/scrape");
+
+    return {
+      ...tracker,
+      announce_url: udpAnnounce,
+      scrape_url: udpScrape,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function getHttpScrapeCandidates(tracker: TorrentTrackerRow) {
@@ -420,7 +498,26 @@ async function scrapeUdp(tracker: TorrentTrackerRow, infoHashHex: string): Promi
 
 async function scrapeTracker(tracker: TorrentTrackerRow, infoHashHex: string): Promise<ScrapeResult> {
   if (/^https?:\/\//i.test(tracker.announce_url) || /^https?:\/\//i.test(tracker.scrape_url || "")) {
-    return scrapeHttp(tracker, infoHashHex);
+    try {
+      return await scrapeHttp(tracker, infoHashHex);
+    } catch (httpError) {
+      const udpFallback = toUdpFallbackTracker(tracker);
+      if (!udpFallback) {
+        throw httpError;
+      }
+
+      try {
+        const result = await scrapeUdp(udpFallback, infoHashHex);
+        return {
+          ...result,
+          trackerSource: tracker.announce_url,
+        };
+      } catch (udpError) {
+        const httpMsg = httpError instanceof Error ? httpError.message : "http tracker failed";
+        const udpMsg = udpError instanceof Error ? udpError.message : "udp fallback failed";
+        throw new Error(`${httpMsg} | udp-fallback:${udpMsg}`.slice(0, 320));
+      }
+    }
   }
 
   if (/^udp:\/\//i.test(tracker.announce_url)) {
@@ -430,39 +527,54 @@ async function scrapeTracker(tracker: TorrentTrackerRow, infoHashHex: string): P
   throw new Error("unsupported tracker protocol");
 }
 
-async function scrapeTrackerWithRetry(tracker: TorrentTrackerRow, infoHash: string, maxAttempts = 2) {
-  let lastError: unknown;
+async function tryScrape(
+  candidate: { id: number; name: string },
+  trackers: TorrentTrackerRow[],
+  infoHash: string,
+  options: RefreshTrackerBatchOptions,
+) {
+  const maxAttempts = options.maxAttempts ?? 2;
+  let lastError = "";
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      return await scrapeTracker(tracker, infoHash);
-    } catch (error) {
-      lastError = error;
-      if (attempt < maxAttempts) {
-        await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+  for (const tracker of trackers) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      options.onEvent?.({
+        type: "tracker_try",
+        torrentId: candidate.id,
+        name: candidate.name,
+        announceUrl: tracker.announce_url,
+        attempt,
+      });
+
+      try {
+        const result = await scrapeTracker(tracker, infoHash);
+        return { result, lastError };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "tracker scrape failed";
+        lastError = message;
+        options.onEvent?.({
+          type: "tracker_fail",
+          torrentId: candidate.id,
+          name: candidate.name,
+          announceUrl: tracker.announce_url,
+          attempt,
+          message,
+        });
+
+        if (attempt < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+        } else {
+          const state = message.includes("unsupported") ? "unsupported" : "error";
+          markTorrentTrackerError(tracker.torrent_id, tracker.announce_url, message, state);
+        }
       }
     }
   }
 
-  throw lastError instanceof Error ? lastError : new Error("tracker scrape failed");
+  return { result: null, lastError };
 }
 
-async function tryScrape(trackers: TorrentTrackerRow[], infoHash: string) {
-  for (const tracker of trackers) {
-    try {
-      const result = await scrapeTrackerWithRetry(tracker, infoHash, 2);
-      return result;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "tracker scrape failed";
-      const state = message.includes("unsupported") ? "unsupported" : "error";
-      markTorrentTrackerError(tracker.torrent_id, tracker.announce_url, message, state);
-    }
-  }
-
-  return null;
-}
-
-export async function refreshTrackerBatch(limit = 60) {
+export async function refreshTrackerBatch(limit = 60, options: RefreshTrackerBatchOptions = {}) {
   const candidates = listTrackerRefreshCandidates(limit);
 
   let ok = 0;
@@ -471,20 +583,54 @@ export async function refreshTrackerBatch(limit = 60) {
 
   for (const candidate of candidates) {
     const trackers = candidate.trackers;
+    options.onEvent?.({
+      type: "candidate_start",
+      torrentId: candidate.id,
+      name: candidate.name,
+      infoHash: candidate.info_hash,
+      trackerCount: trackers.length,
+    });
+
     if (!candidate.info_hash || trackers.length === 0) {
       markTorrentTrackerError(candidate.id, "", "no tracker", "unsupported");
+      options.onEvent?.({
+        type: "candidate_fail",
+        torrentId: candidate.id,
+        name: candidate.name,
+        reason: "unsupported",
+        message: "no tracker",
+      });
       unsupported += 1;
       continue;
     }
 
-    const result = await tryScrape(trackers, candidate.info_hash);
+    const { result, lastError } = await tryScrape(
+      { id: candidate.id, name: candidate.name },
+      trackers,
+      candidate.info_hash,
+      options,
+    );
     if (!result) {
       const hasSupported = trackers.some((tracker) => {
         return /^https?:\/\//i.test(tracker.scrape_url || tracker.announce_url) || /^udp:\/\//i.test(tracker.announce_url);
       });
       if (!hasSupported) {
+        options.onEvent?.({
+          type: "candidate_fail",
+          torrentId: candidate.id,
+          name: candidate.name,
+          reason: "unsupported",
+          message: lastError || "unsupported tracker protocol",
+        });
         unsupported += 1;
       } else {
+        options.onEvent?.({
+          type: "candidate_fail",
+          torrentId: candidate.id,
+          name: candidate.name,
+          reason: "failed",
+          message: lastError || "all trackers failed",
+        });
         failed += 1;
       }
       continue;
@@ -497,6 +643,15 @@ export async function refreshTrackerBatch(limit = 60) {
       trackerSource: result.trackerSource,
       trackerState: "ok",
       trackerError: "",
+    });
+    options.onEvent?.({
+      type: "candidate_success",
+      torrentId: candidate.id,
+      name: candidate.name,
+      announceUrl: result.trackerSource,
+      seeds: result.seeds,
+      leechers: result.leechers,
+      completed: result.completed,
     });
     ok += 1;
   }
