@@ -19,11 +19,17 @@ const badgeClass: Record<string, string> = {
   软件: "badge-indigo",
 };
 
+function parseDateMaybeUtc(value: string) {
+  const normalized = value.includes("T") ? value : value.replace(" ", "T");
+  const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/.test(normalized);
+  return new Date(hasTimezone ? normalized : `${normalized}Z`);
+}
+
 function formatRelativeTime(value: string | null) {
   if (!value) {
     return "刚刚";
   }
-  const date = new Date(value.includes("T") ? value : value.replace(" ", "T"));
+  const date = parseDateMaybeUtc(value);
   const diffMs = Date.now() - date.getTime();
   const hour = 60 * 60 * 1000;
   const day = 24 * hour;
@@ -46,7 +52,7 @@ function renderTags(row: TorrentRow) {
 
   return (
     <div className="tag-list">
-      <span className="small-tag">免费下载</span>
+      {tags.length === 0 && row.is_free_download ? <span className="small-tag">免费下载</span> : null}
       {row.is_trusted ? <span className="small-tag trusted">信任种子</span> : null}
       {row.tracker_last_checked_at ? (
         <span className="small-tag">抓取: {formatRelativeTime(row.tracker_last_checked_at)}</span>

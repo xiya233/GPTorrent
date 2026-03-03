@@ -10,8 +10,14 @@ type TorrentDetailPageProps = {
   params: Promise<{ id: string }>;
 };
 
+function parseDateMaybeUtc(value: string) {
+  const normalized = value.includes("T") ? value : value.replace(" ", "T");
+  const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/.test(normalized);
+  return new Date(hasTimezone ? normalized : `${normalized}Z`);
+}
+
 function formatDate(value: string) {
-  return new Date(value).toLocaleString("zh-CN");
+  return parseDateMaybeUtc(value).toLocaleString("zh-CN", { hour12: false });
 }
 
 function formatBytes(sizeBytes: number) {
@@ -53,19 +59,19 @@ export default async function TorrentDetailPage({ params }: TorrentDetailPagePro
       <div className="page-heading-row">
         <h1>{detail.torrent.name}</h1>
         <div className="detail-actions">
-          <a className="secondary-btn" href={`/download/${detail.torrent.id}`}>
+          <a className="primary-btn" href={`/download/${detail.torrent.id}`}>
             下载种子
           </a>
-          <MagnetCopyButton magnetUri={detail.torrent.magnet_uri} />
+          <MagnetCopyButton magnetUri={detail.torrent.magnet_uri} variant="primary" />
           {canEdit ? (
-            <Link className="secondary-btn" href={`/my/torrents/${detail.torrent.id}/edit`}>
+            <Link className="primary-btn" href={`/my/torrents/${detail.torrent.id}/edit`}>
               编辑
             </Link>
           ) : null}
           {canDelete ? (
             <form action={`/api/torrents/${detail.torrent.id}/delete`} method="POST">
               <input name="redirectTo" type="hidden" value="/" />
-              <button className="danger-btn tiny-btn" type="submit">
+              <button className="primary-btn" type="submit">
                 删除
               </button>
             </form>

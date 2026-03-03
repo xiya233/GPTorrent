@@ -383,6 +383,11 @@ tbody tr:last-child td {
   font-size: 0.88rem;
   font-weight: 600;
   padding: 10px 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  line-height: 1;
   cursor: pointer;
   transition: 0.2s ease;
 }
@@ -401,6 +406,16 @@ tbody tr:last-child td {
   border-color: var(--border);
   background: transparent;
   color: var(--text-primary);
+}
+
+.primary-btn:disabled,
+.secondary-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.magnet-primary-btn {
+  min-width: 132px;
 }
 
 .back-link {
