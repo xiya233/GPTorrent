@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdminUser } from "@/lib/auth";
-import { updateSiteBranding } from "@/lib/db";
+import { updateSiteSettings } from "@/lib/db";
 import { saveUploadedFile } from "@/lib/storage";
 
 export type AdminSiteActionState = {
@@ -11,6 +11,15 @@ export type AdminSiteActionState = {
 };
 
 const LOGO_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/svg+xml"]);
+
+function parsePositiveInt(formData: FormData, key: string, fallback: number) {
+  const raw = (formData.get(key) as string | null) ?? "";
+  const num = Number(raw);
+  if (!Number.isFinite(num)) {
+    return fallback;
+  }
+  return Math.max(1, Math.floor(num));
+}
 
 export async function adminUpdateSiteBrandingAction(
   _prevState: AdminSiteActionState,
@@ -22,6 +31,13 @@ export async function adminUpdateSiteBrandingAction(
   const logoFile = formData.get("logoFile");
   const allowGuestUpload = formData.get("allowGuestUpload") === "on";
   const allowUserDeleteTorrent = formData.get("allowUserDeleteTorrent") === "on";
+  const allowGuestTorrentImageUpload = formData.get("allowGuestTorrentImageUpload") === "on";
+  const enableLoginCaptcha = formData.get("enableLoginCaptcha") === "on";
+  const enableRegisterCaptcha = formData.get("enableRegisterCaptcha") === "on";
+  const maxAvatarUploadMb = parsePositiveInt(formData, "maxAvatarUploadMb", 2);
+  const maxTorrentImageUploadMb = parsePositiveInt(formData, "maxTorrentImageUploadMb", 2);
+  const guestTorrentFileMaxMb = parsePositiveInt(formData, "guestTorrentFileMaxMb", 1);
+  const userTorrentFileMaxMb = parsePositiveInt(formData, "userTorrentFileMaxMb", 10);
 
   if (!titleText || titleText.length > 60) {
     return { error: "标题长度需在 1-60 字符之间", success: null };
@@ -48,11 +64,18 @@ export async function adminUpdateSiteBrandingAction(
     logoPath = saved.relativePath;
   }
 
-  updateSiteBranding({
+  updateSiteSettings({
     titleText,
     logoPath,
     allowGuestUpload,
     allowUserDeleteTorrent,
+    allowGuestTorrentImageUpload,
+    enableLoginCaptcha,
+    enableRegisterCaptcha,
+    maxAvatarUploadMb,
+    maxTorrentImageUploadMb,
+    guestTorrentFileMaxMb,
+    userTorrentFileMaxMb,
   });
 
   revalidatePath("/");

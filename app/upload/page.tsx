@@ -3,7 +3,7 @@ import { CircleAlert } from "lucide-react";
 import { redirect } from "next/navigation";
 import { UploadForm } from "@/app/upload/upload-form";
 import { getCurrentUserState } from "@/lib/auth";
-import { getSiteFeatureFlags } from "@/lib/db";
+import { getUploadPolicy, getSiteFeatureFlags } from "@/lib/db";
 
 const uploadRules = [
   "请确保您拥有分发所上传内容的权利。",
@@ -14,7 +14,7 @@ const uploadRules = [
 
 export default async function UploadPage() {
   const { user, blocked } = await getCurrentUserState();
-  const flags = getSiteFeatureFlags();
+  const [flags, policy] = [getSiteFeatureFlags(), getUploadPolicy()];
   if (blocked) {
     redirect("/auth/login");
   }
@@ -29,7 +29,14 @@ export default async function UploadPage() {
       </div>
 
       <section className="card">
-        <UploadForm allowGuestUpload={flags.allowGuestUpload} isLoggedIn={Boolean(user)} />
+        <UploadForm
+          allowGuestTorrentImageUpload={policy.allowGuestTorrentImageUpload}
+          allowGuestUpload={flags.allowGuestUpload}
+          guestTorrentFileMaxMb={policy.guestTorrentFileMaxMb}
+          isLoggedIn={Boolean(user)}
+          maxTorrentImageUploadMb={policy.maxTorrentImageUploadMb}
+          userTorrentFileMaxMb={policy.userTorrentFileMaxMb}
+        />
       </section>
 
       <section className="card rules-card">

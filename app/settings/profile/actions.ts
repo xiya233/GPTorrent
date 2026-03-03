@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { requireActiveUser } from "@/lib/auth";
-import { getUserById, updateUserPasswordHash, updateUserProfile } from "@/lib/db";
+import { getUploadPolicy, getUserById, updateUserPasswordHash, updateUserProfile } from "@/lib/db";
+import { saveUploadedImageAsWebp } from "@/lib/image-upload";
 import { hashPassword, validatePasswordStrength, verifyPassword } from "@/lib/password";
-import { saveUploadedFile } from "@/lib/storage";
 
 export type ProfileActionState = {
   error: string | null;
@@ -18,6 +18,7 @@ export async function updateProfileAction(
   formData: FormData,
 ): Promise<ProfileActionState> {
   const user = await requireActiveUser();
+  const uploadPolicy = getUploadPolicy();
   const bio = ((formData.get("bio") as string | null) ?? "").trim();
   const avatar = formData.get("avatarFile");
 
@@ -32,11 +33,12 @@ export async function updateProfileAction(
       return { error: "头像仅支持 jpg/png/webp/svg", success: null };
     }
 
-    const saved = await saveUploadedFile({
+    const saved = await saveUploadedImageAsWebp({
       file: avatar,
       dir: "avatars",
-      maxBytes: 2 * 1024 * 1024,
-      allowedExts: [".jpg", ".jpeg", ".png", ".webp", ".svg"],
+      maxBytes: uploadPolicy.maxAvatarUploadMb * 1024 * 1024,
+      maxWidth: 512,
+      maxHeight: 512,
     });
 
     if (!saved.ok) {

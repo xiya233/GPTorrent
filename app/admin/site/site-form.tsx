@@ -10,9 +10,27 @@ type SiteFormProps = {
   titleText: string;
   allowGuestUpload: boolean;
   allowUserDeleteTorrent: boolean;
+  enableLoginCaptcha: boolean;
+  enableRegisterCaptcha: boolean;
+  maxAvatarUploadMb: number;
+  maxTorrentImageUploadMb: number;
+  allowGuestTorrentImageUpload: boolean;
+  guestTorrentFileMaxMb: number;
+  userTorrentFileMaxMb: number;
 };
 
-export function SiteForm({ titleText, allowGuestUpload, allowUserDeleteTorrent }: SiteFormProps) {
+export function SiteForm({
+  titleText,
+  allowGuestUpload,
+  allowUserDeleteTorrent,
+  enableLoginCaptcha,
+  enableRegisterCaptcha,
+  maxAvatarUploadMb,
+  maxTorrentImageUploadMb,
+  allowGuestTorrentImageUpload,
+  guestTorrentFileMaxMb,
+  userTorrentFileMaxMb,
+}: SiteFormProps) {
   const initialState: AdminSiteActionState = {
     error: null,
     success: null,
@@ -58,6 +76,92 @@ export function SiteForm({ titleText, allowGuestUpload, allowUserDeleteTorrent }
           <small>关闭后，仅管理员可删除种子。</small>
         </span>
       </label>
+
+      <label className="checkbox-row" htmlFor="allowGuestTorrentImageUpload">
+        <input
+          defaultChecked={allowGuestTorrentImageUpload}
+          id="allowGuestTorrentImageUpload"
+          name="allowGuestTorrentImageUpload"
+          type="checkbox"
+        />
+        <span>
+          <strong>允许游客上传种子图片</strong>
+          <small>关闭后，游客可上传种子但不能附带图片。</small>
+        </span>
+      </label>
+
+      <label className="checkbox-row" htmlFor="enableLoginCaptcha">
+        <input defaultChecked={enableLoginCaptcha} id="enableLoginCaptcha" name="enableLoginCaptcha" type="checkbox" />
+        <span>
+          <strong>启用登录验证码</strong>
+          <small>登录页面显示图片验证码。</small>
+        </span>
+      </label>
+
+      <label className="checkbox-row" htmlFor="enableRegisterCaptcha">
+        <input
+          defaultChecked={enableRegisterCaptcha}
+          id="enableRegisterCaptcha"
+          name="enableRegisterCaptcha"
+          type="checkbox"
+        />
+        <span>
+          <strong>启用注册验证码</strong>
+          <small>注册页面显示图片验证码。</small>
+        </span>
+      </label>
+
+      <div className="field-group">
+        <label htmlFor="maxAvatarUploadMb">头像最大上传大小 (MB)</label>
+        <input
+          defaultValue={maxAvatarUploadMb}
+          id="maxAvatarUploadMb"
+          max={20}
+          min={1}
+          name="maxAvatarUploadMb"
+          required
+          type="number"
+        />
+      </div>
+
+      <div className="field-group">
+        <label htmlFor="maxTorrentImageUploadMb">种子图片最大上传大小 (MB)</label>
+        <input
+          defaultValue={maxTorrentImageUploadMb}
+          id="maxTorrentImageUploadMb"
+          max={20}
+          min={1}
+          name="maxTorrentImageUploadMb"
+          required
+          type="number"
+        />
+      </div>
+
+      <div className="field-group">
+        <label htmlFor="guestTorrentFileMaxMb">游客种子文件最大上传大小 (MB)</label>
+        <input
+          defaultValue={guestTorrentFileMaxMb}
+          id="guestTorrentFileMaxMb"
+          max={100}
+          min={1}
+          name="guestTorrentFileMaxMb"
+          required
+          type="number"
+        />
+      </div>
+
+      <div className="field-group">
+        <label htmlFor="userTorrentFileMaxMb">登录用户种子文件最大上传大小 (MB)</label>
+        <input
+          defaultValue={userTorrentFileMaxMb}
+          id="userTorrentFileMaxMb"
+          max={100}
+          min={1}
+          name="userTorrentFileMaxMb"
+          required
+          type="number"
+        />
+      </div>
 
       {state.error ? <p className="form-error">{state.error}</p> : null}
       {state.success ? <p className="form-success">{state.success}</p> : null}

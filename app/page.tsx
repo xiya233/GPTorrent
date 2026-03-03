@@ -14,9 +14,12 @@ const badgeClass: Record<string, string> = {
   动画: "badge-red",
   音乐: "badge-purple",
   电影: "badge-blue",
+  电视剧: "badge-cyan",
   游戏: "badge-green",
   书籍: "badge-yellow",
   软件: "badge-indigo",
+  成人: "badge-pink",
+  其他: "badge-slate",
 };
 
 function parseDateMaybeUtc(value: string) {

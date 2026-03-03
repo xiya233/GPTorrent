@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { EditTorrentForm } from "@/app/my/torrents/[id]/edit/edit-form";
 import { requireActiveUser } from "@/lib/auth";
-import { getTorrentDetailById } from "@/lib/db";
+import { getTorrentDetailById, getUploadPolicy } from "@/lib/db";
 import { toMediaUrl } from "@/lib/media-url";
 
 type EditPageProps = {
@@ -11,6 +11,7 @@ type EditPageProps = {
 
 export default async function EditTorrentPage({ params }: EditPageProps) {
   const user = await requireActiveUser();
+  const uploadPolicy = getUploadPolicy();
   const { id } = await params;
   const torrentId = Number(id);
 
@@ -54,6 +55,7 @@ export default async function EditTorrentPage({ params }: EditPageProps) {
           .filter((img) => Boolean(img.url))}
         name={detail.torrent.name}
         tags={detail.torrent.tags}
+        maxTorrentImageUploadMb={uploadPolicy.maxTorrentImageUploadMb}
       />
     </div>
   );

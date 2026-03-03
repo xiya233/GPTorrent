@@ -23,8 +23,15 @@ export default async function AdminSitePage() {
       <div className="admin-grid site-grid">
         <SiteForm
           allowGuestUpload={settings.allowGuestUpload}
+          allowGuestTorrentImageUpload={settings.allowGuestTorrentImageUpload}
           allowUserDeleteTorrent={settings.allowUserDeleteTorrent}
+          enableLoginCaptcha={settings.enableLoginCaptcha}
+          enableRegisterCaptcha={settings.enableRegisterCaptcha}
+          guestTorrentFileMaxMb={settings.guestTorrentFileMaxMb}
+          maxAvatarUploadMb={settings.maxAvatarUploadMb}
+          maxTorrentImageUploadMb={settings.maxTorrentImageUploadMb}
           titleText={branding.titleText}
+          userTorrentFileMaxMb={settings.userTorrentFileMaxMb}
         />
 
         <section className="card site-preview">

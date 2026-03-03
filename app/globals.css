@@ -314,6 +314,21 @@ tbody tr:last-child td {
   color: #6366f1;
 }
 
+.badge-cyan {
+  background: color-mix(in srgb, #06b6d4 20%, transparent);
+  color: #0891b2;
+}
+
+.badge-pink {
+  background: color-mix(in srgb, #ec4899 20%, transparent);
+  color: #db2777;
+}
+
+.badge-slate {
+  background: color-mix(in srgb, #64748b 20%, transparent);
+  color: #475569;
+}
+
 .badge-gray {
   background: color-mix(in srgb, var(--text-secondary) 18%, transparent);
   color: var(--text-secondary);
@@ -850,6 +865,28 @@ tbody tr:last-child td {
   font-weight: 600;
 }
 
+.captcha-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.captcha-image-wrap {
+  width: 140px;
+  height: 48px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--background);
+  overflow: hidden;
+}
+
+.captcha-image-wrap > div,
+.captcha-image-wrap svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 .form-success {
   margin-top: 12px;
   border: 1px solid color-mix(in srgb, #10b981 35%, transparent);
@@ -920,6 +957,45 @@ tbody tr:last-child td {
 .profile-section h2 {
   margin: 0 0 12px;
   font-size: 1rem;
+}
+
+.avatar-crop-stage {
+  position: relative;
+  width: 100%;
+  max-width: 340px;
+  height: 280px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+}
+
+.avatar-crop-controls {
+  display: grid;
+  gap: 8px;
+}
+
+.avatar-crop-controls input[type=\"range\"] {
+  width: 100%;
+}
+
+.avatar-crop-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.avatar-crop-preview-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatar-crop-preview {
+  width: 58px;
+  height: 58px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  object-fit: cover;
 }
 
 .stack-form {
@@ -1124,6 +1200,13 @@ tbody tr:last-child td {
   position: relative;
   min-height: 140px;
   display: block;
+}
+
+.detail-image-button {
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  cursor: zoom-in;
 }
 
 .image-remove-btn {

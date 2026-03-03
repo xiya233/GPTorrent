@@ -4,14 +4,14 @@ import {
   addTorrentImages,
   deleteTorrentImagesByIds,
   getTorrentById,
+  getUploadPolicy,
   listTorrentImages,
   updateTorrentAsAdmin,
   updateTorrentByOwner,
 } from "@/lib/db";
-import { saveUploadedFile } from "@/lib/storage";
+import { saveUploadedImageAsWebp } from "@/lib/image-upload";
 
 const MAX_IMAGE_COUNT = 9;
-const MAX_IMAGE_SIZE = 2 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/svg+xml"]);
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -42,6 +42,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!isAdmin && !isOwner) {
     return NextResponse.json({ error: "无权限" }, { status: 403 });
   }
+  const uploadPolicy = getUploadPolicy();
 
   const formData = await request.formData();
   const name = ((formData.get("name") as string | null) ?? "").trim();
@@ -89,11 +90,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "图片仅支持 jpg/png/webp/svg" }, { status: 400 });
     }
 
-    const saved = await saveUploadedFile({
+    const saved = await saveUploadedImageAsWebp({
       file: image,
       dir: "torrent-images",
-      maxBytes: MAX_IMAGE_SIZE,
-      allowedExts: [".jpg", ".jpeg", ".png", ".webp", ".svg"],
+      maxBytes: uploadPolicy.maxTorrentImageUploadMb * 1024 * 1024,
+      maxWidth: 2200,
+      maxHeight: 2200,
     });
 
     if (!saved.ok) {

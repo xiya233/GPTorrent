@@ -112,9 +112,38 @@ export type SiteBranding = {
 export type SiteFeatureFlags = {
   allowGuestUpload: boolean;
   allowUserDeleteTorrent: boolean;
+  allowGuestTorrentImageUpload: boolean;
 };
 
-export type SiteSettings = SiteBranding & SiteFeatureFlags;
+export type UploadPolicy = {
+  maxAvatarUploadMb: number;
+  maxTorrentImageUploadMb: number;
+  guestTorrentFileMaxMb: number;
+  userTorrentFileMaxMb: number;
+  allowGuestTorrentImageUpload: boolean;
+};
+
+export type AuthCaptchaPolicy = {
+  enableLoginCaptcha: boolean;
+  enableRegisterCaptcha: boolean;
+};
+
+export type SiteSettings = SiteBranding &
+  SiteFeatureFlags &
+  UploadPolicy &
+  AuthCaptchaPolicy;
+
+export type CaptchaPurpose = "login" | "register";
+
+export type CaptchaChallengeRow = {
+  id: string;
+  purpose: CaptchaPurpose;
+  answer_hash: string;
+  expires_at: string;
+  consumed_at: string | null;
+  created_at: string;
+  client_ip: string;
+};
 
 type InsertTorrentInput = {
   name: string;
@@ -229,11 +258,22 @@ CREATE TABLE IF NOT EXISTS torrent_images (
   FOREIGN KEY(torrent_id) REFERENCES torrents(id)
 );
 
+CREATE TABLE IF NOT EXISTS captcha_challenges (
+  id TEXT PRIMARY KEY,
+  purpose TEXT NOT NULL CHECK(purpose IN ('login', 'register')),
+  answer_hash TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  consumed_at TEXT,
+  created_at TEXT NOT NULL,
+  client_ip TEXT NOT NULL DEFAULT ''
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_torrent_trackers_torrent_id ON torrent_trackers(torrent_id);
 CREATE INDEX IF NOT EXISTS idx_torrent_files_torrent_id ON torrent_files(torrent_id);
 CREATE INDEX IF NOT EXISTS idx_torrent_images_torrent_id ON torrent_images(torrent_id);
+CREATE INDEX IF NOT EXISTS idx_captcha_expires_at ON captcha_challenges(expires_at);
 `);
 
 function ensureColumn(table: string, column: string, alterSql: string) {
@@ -264,6 +304,41 @@ ensureColumn(
   "allow_user_delete_torrent",
   "ALTER TABLE site_settings ADD COLUMN allow_user_delete_torrent INTEGER NOT NULL DEFAULT 1",
 );
+ensureColumn(
+  "site_settings",
+  "enable_login_captcha",
+  "ALTER TABLE site_settings ADD COLUMN enable_login_captcha INTEGER NOT NULL DEFAULT 1",
+);
+ensureColumn(
+  "site_settings",
+  "enable_register_captcha",
+  "ALTER TABLE site_settings ADD COLUMN enable_register_captcha INTEGER NOT NULL DEFAULT 1",
+);
+ensureColumn(
+  "site_settings",
+  "max_avatar_upload_mb",
+  "ALTER TABLE site_settings ADD COLUMN max_avatar_upload_mb INTEGER NOT NULL DEFAULT 2",
+);
+ensureColumn(
+  "site_settings",
+  "max_torrent_image_upload_mb",
+  "ALTER TABLE site_settings ADD COLUMN max_torrent_image_upload_mb INTEGER NOT NULL DEFAULT 2",
+);
+ensureColumn(
+  "site_settings",
+  "allow_guest_torrent_image_upload",
+  "ALTER TABLE site_settings ADD COLUMN allow_guest_torrent_image_upload INTEGER NOT NULL DEFAULT 1",
+);
+ensureColumn(
+  "site_settings",
+  "guest_torrent_file_max_mb",
+  "ALTER TABLE site_settings ADD COLUMN guest_torrent_file_max_mb INTEGER NOT NULL DEFAULT 1",
+);
+ensureColumn(
+  "site_settings",
+  "user_torrent_file_max_mb",
+  "ALTER TABLE site_settings ADD COLUMN user_torrent_file_max_mb INTEGER NOT NULL DEFAULT 10",
+);
 
 db.exec(
   "CREATE UNIQUE INDEX IF NOT EXISTS idx_torrents_info_hash_unique ON torrents(info_hash) WHERE status = 'active' AND info_hash IS NOT NULL AND info_hash != ''",
@@ -272,7 +347,7 @@ db.exec(
 const settingsExists = db.query("SELECT id FROM site_settings WHERE id = 1").get() as { id: number } | null;
 if (!settingsExists) {
   db.query(
-    "INSERT INTO site_settings (id, title_text, logo_path, allow_guest_upload, allow_user_delete_torrent, updated_at) VALUES (1, 'Sukebei.dl', '', 1, 1, ?)",
+    "INSERT INTO site_settings (id, title_text, logo_path, allow_guest_upload, allow_user_delete_torrent, enable_login_captcha, enable_register_captcha, max_avatar_upload_mb, max_torrent_image_upload_mb, allow_guest_torrent_image_upload, guest_torrent_file_max_mb, user_torrent_file_max_mb, updated_at) VALUES (1, 'Sukebei.dl', '', 1, 1, 1, 1, 2, 2, 1, 1, 10, ?)",
   ).run(new Date().toISOString());
 }
 
@@ -1010,10 +1085,42 @@ export function deleteExpiredSessions() {
   db.query("DELETE FROM sessions WHERE datetime(expires_at) <= datetime('now')").run();
 }
 
+export function createCaptchaChallenge(input: {
+  id: string;
+  purpose: CaptchaPurpose;
+  answerHash: string;
+  expiresAt: string;
+  clientIp: string;
+}) {
+  const now = new Date().toISOString();
+  db.query(
+    "INSERT INTO captcha_challenges (id, purpose, answer_hash, expires_at, consumed_at, created_at, client_ip) VALUES (?, ?, ?, ?, NULL, ?, ?)",
+  ).run(input.id, input.purpose, input.answerHash, input.expiresAt, now, input.clientIp);
+}
+
+export function consumeCaptchaChallenge(input: {
+  id: string;
+  purpose: CaptchaPurpose;
+  answerHash: string;
+  nowIso: string;
+}) {
+  const result = db.query(
+    "UPDATE captcha_challenges SET consumed_at = ? WHERE id = ? AND purpose = ? AND answer_hash = ? AND consumed_at IS NULL AND expires_at > ?",
+  ).run(input.nowIso, input.id, input.purpose, input.answerHash, input.nowIso);
+  return result.changes > 0;
+}
+
+export function deleteExpiredCaptchaChallenges(nowIso: string) {
+  const cutoffConsumedIso = new Date(Date.parse(nowIso) - 24 * 60 * 60 * 1000).toISOString();
+  db.query(
+    "DELETE FROM captcha_challenges WHERE expires_at <= ? OR (consumed_at IS NOT NULL AND consumed_at <= ?)",
+  ).run(nowIso, cutoffConsumedIso);
+}
+
 export function getSiteSettings(): SiteSettings {
   const row = db
     .query(
-      "SELECT title_text AS titleText, logo_path AS logoPath, allow_guest_upload AS allowGuestUpload, allow_user_delete_torrent AS allowUserDeleteTorrent FROM site_settings WHERE id = 1",
+      "SELECT title_text AS titleText, logo_path AS logoPath, allow_guest_upload AS allowGuestUpload, allow_user_delete_torrent AS allowUserDeleteTorrent, enable_login_captcha AS enableLoginCaptcha, enable_register_captcha AS enableRegisterCaptcha, max_avatar_upload_mb AS maxAvatarUploadMb, max_torrent_image_upload_mb AS maxTorrentImageUploadMb, allow_guest_torrent_image_upload AS allowGuestTorrentImageUpload, guest_torrent_file_max_mb AS guestTorrentFileMaxMb, user_torrent_file_max_mb AS userTorrentFileMaxMb FROM site_settings WHERE id = 1",
     )
     .get() as
     | {
@@ -1021,6 +1128,13 @@ export function getSiteSettings(): SiteSettings {
         logoPath: string;
         allowGuestUpload: number;
         allowUserDeleteTorrent: number;
+        enableLoginCaptcha: number;
+        enableRegisterCaptcha: number;
+        maxAvatarUploadMb: number;
+        maxTorrentImageUploadMb: number;
+        allowGuestTorrentImageUpload: number;
+        guestTorrentFileMaxMb: number;
+        userTorrentFileMaxMb: number;
       }
     | null;
 
@@ -1030,6 +1144,13 @@ export function getSiteSettings(): SiteSettings {
       logoPath: "",
       allowGuestUpload: true,
       allowUserDeleteTorrent: true,
+      enableLoginCaptcha: true,
+      enableRegisterCaptcha: true,
+      maxAvatarUploadMb: 2,
+      maxTorrentImageUploadMb: 2,
+      allowGuestTorrentImageUpload: true,
+      guestTorrentFileMaxMb: 1,
+      userTorrentFileMaxMb: 10,
     };
   }
 
@@ -1038,6 +1159,13 @@ export function getSiteSettings(): SiteSettings {
     logoPath: row.logoPath,
     allowGuestUpload: row.allowGuestUpload === 1,
     allowUserDeleteTorrent: row.allowUserDeleteTorrent === 1,
+    enableLoginCaptcha: row.enableLoginCaptcha === 1,
+    enableRegisterCaptcha: row.enableRegisterCaptcha === 1,
+    maxAvatarUploadMb: Math.max(1, row.maxAvatarUploadMb),
+    maxTorrentImageUploadMb: Math.max(1, row.maxTorrentImageUploadMb),
+    allowGuestTorrentImageUpload: row.allowGuestTorrentImageUpload === 1,
+    guestTorrentFileMaxMb: Math.max(1, row.guestTorrentFileMaxMb),
+    userTorrentFileMaxMb: Math.max(1, row.userTorrentFileMaxMb),
   };
 }
 
@@ -1054,14 +1182,41 @@ export function getSiteFeatureFlags(): SiteFeatureFlags {
   return {
     allowGuestUpload: s.allowGuestUpload,
     allowUserDeleteTorrent: s.allowUserDeleteTorrent,
+    allowGuestTorrentImageUpload: s.allowGuestTorrentImageUpload,
   };
 }
 
-export function updateSiteBranding(input: {
+export function getUploadPolicy(): UploadPolicy {
+  const s = getSiteSettings();
+  return {
+    maxAvatarUploadMb: s.maxAvatarUploadMb,
+    maxTorrentImageUploadMb: s.maxTorrentImageUploadMb,
+    guestTorrentFileMaxMb: s.guestTorrentFileMaxMb,
+    userTorrentFileMaxMb: s.userTorrentFileMaxMb,
+    allowGuestTorrentImageUpload: s.allowGuestTorrentImageUpload,
+  };
+}
+
+export function getAuthCaptchaPolicy(): AuthCaptchaPolicy {
+  const s = getSiteSettings();
+  return {
+    enableLoginCaptcha: s.enableLoginCaptcha,
+    enableRegisterCaptcha: s.enableRegisterCaptcha,
+  };
+}
+
+export function updateSiteSettings(input: {
   titleText: string;
   logoPath?: string;
   allowGuestUpload?: boolean;
   allowUserDeleteTorrent?: boolean;
+  enableLoginCaptcha?: boolean;
+  enableRegisterCaptcha?: boolean;
+  maxAvatarUploadMb?: number;
+  maxTorrentImageUploadMb?: number;
+  allowGuestTorrentImageUpload?: boolean;
+  guestTorrentFileMaxMb?: number;
+  userTorrentFileMaxMb?: number;
 }) {
   const current = getSiteSettings();
 
@@ -1073,16 +1228,55 @@ export function updateSiteBranding(input: {
     typeof input.allowUserDeleteTorrent === "boolean"
       ? input.allowUserDeleteTorrent
       : current.allowUserDeleteTorrent;
+  const enableLoginCaptcha =
+    typeof input.enableLoginCaptcha === "boolean" ? input.enableLoginCaptcha : current.enableLoginCaptcha;
+  const enableRegisterCaptcha =
+    typeof input.enableRegisterCaptcha === "boolean"
+      ? input.enableRegisterCaptcha
+      : current.enableRegisterCaptcha;
+  const maxAvatarUploadMb = Math.max(1, Math.floor(input.maxAvatarUploadMb ?? current.maxAvatarUploadMb));
+  const maxTorrentImageUploadMb = Math.max(
+    1,
+    Math.floor(input.maxTorrentImageUploadMb ?? current.maxTorrentImageUploadMb),
+  );
+  const allowGuestTorrentImageUpload =
+    typeof input.allowGuestTorrentImageUpload === "boolean"
+      ? input.allowGuestTorrentImageUpload
+      : current.allowGuestTorrentImageUpload;
+  const guestTorrentFileMaxMb = Math.max(
+    1,
+    Math.floor(input.guestTorrentFileMaxMb ?? current.guestTorrentFileMaxMb),
+  );
+  const userTorrentFileMaxMb = Math.max(
+    1,
+    Math.floor(input.userTorrentFileMaxMb ?? current.userTorrentFileMaxMb),
+  );
 
   db.query(
-    "UPDATE site_settings SET title_text = ?, logo_path = ?, allow_guest_upload = ?, allow_user_delete_torrent = ?, updated_at = ? WHERE id = 1",
+    "UPDATE site_settings SET title_text = ?, logo_path = ?, allow_guest_upload = ?, allow_user_delete_torrent = ?, enable_login_captcha = ?, enable_register_captcha = ?, max_avatar_upload_mb = ?, max_torrent_image_upload_mb = ?, allow_guest_torrent_image_upload = ?, guest_torrent_file_max_mb = ?, user_torrent_file_max_mb = ?, updated_at = ? WHERE id = 1",
   ).run(
     titleText,
     logoPath,
     allowGuestUpload ? 1 : 0,
     allowUserDeleteTorrent ? 1 : 0,
+    enableLoginCaptcha ? 1 : 0,
+    enableRegisterCaptcha ? 1 : 0,
+    maxAvatarUploadMb,
+    maxTorrentImageUploadMb,
+    allowGuestTorrentImageUpload ? 1 : 0,
+    guestTorrentFileMaxMb,
+    userTorrentFileMaxMb,
     new Date().toISOString(),
   );
+}
+
+export function updateSiteBranding(input: {
+  titleText: string;
+  logoPath?: string;
+  allowGuestUpload?: boolean;
+  allowUserDeleteTorrent?: boolean;
+}) {
+  updateSiteSettings(input);
 }
 
 export function countUsers() {

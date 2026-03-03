@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME, getUserStateFromToken } from "@/lib/auth";
-import { createTorrentWithMeta, getSiteFeatureFlags, getTorrentByInfoHash } from "@/lib/db";
+import { isValidTorrentCategory } from "@/lib/categories";
+import { createTorrentWithMeta, getSiteFeatureFlags, getTorrentByInfoHash, getUploadPolicy } from "@/lib/db";
+import { saveUploadedImageAsWebp } from "@/lib/image-upload";
 import { parseTorrentMeta } from "@/lib/torrent";
 import { formatBytes, saveUploadedFile } from "@/lib/storage";
 
-const MAX_TORRENT_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_IMAGE_COUNT = 9;
-const MAX_IMAGE_SIZE = 2 * 1024 * 1024;
 
 function normalizeTags(input: string) {
   return input
@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
   }
 
   const flags = getSiteFeatureFlags();
+  const uploadPolicy = getUploadPolicy();
   if (!user && !flags.allowGuestUpload) {
     return NextResponse.json({ error: "管理员已关闭游客上传功能" }, { status: 403 });
   }
@@ -44,6 +45,9 @@ export async function POST(request: NextRequest) {
   }
   if (!category) {
     return NextResponse.json({ error: "请选择分类" }, { status: 400 });
+  }
+  if (!isValidTorrentCategory(category)) {
+    return NextResponse.json({ error: "分类不合法" }, { status: 400 });
   }
   if (!description) {
     return NextResponse.json({ error: "请填写描述" }, { status: 400 });
@@ -68,7 +72,7 @@ export async function POST(request: NextRequest) {
   const savedTorrent = await saveUploadedFile({
     file,
     dir: "uploads",
-    maxBytes: MAX_TORRENT_FILE_SIZE,
+    maxBytes: (user ? uploadPolicy.userTorrentFileMaxMb : uploadPolicy.guestTorrentFileMaxMb) * 1024 * 1024,
     allowedExts: [".torrent"],
   });
 
@@ -83,6 +87,9 @@ export async function POST(request: NextRequest) {
   if (imageFiles.length > MAX_IMAGE_COUNT) {
     return NextResponse.json({ error: `最多上传 ${MAX_IMAGE_COUNT} 张图片` }, { status: 400 });
   }
+  if (!user && imageFiles.length > 0 && !uploadPolicy.allowGuestTorrentImageUpload) {
+    return NextResponse.json({ error: "管理员已关闭游客上传种子图片功能" }, { status: 403 });
+  }
 
   const imagePaths: string[] = [];
 
@@ -91,11 +98,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "图片仅支持 jpg/png/webp/svg" }, { status: 400 });
     }
 
-    const savedImage = await saveUploadedFile({
+    const savedImage = await saveUploadedImageAsWebp({
       file: image,
       dir: "torrent-images",
-      maxBytes: MAX_IMAGE_SIZE,
-      allowedExts: [".jpg", ".jpeg", ".png", ".webp", ".svg"],
+      maxBytes: uploadPolicy.maxTorrentImageUploadMb * 1024 * 1024,
+      maxWidth: 2200,
+      maxHeight: 2200,
     });
 
     if (!savedImage.ok) {

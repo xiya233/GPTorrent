@@ -4,10 +4,11 @@ import { Search } from "lucide-react";
 import { logoutAction } from "@/app/auth/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { getCurrentUser } from "@/lib/auth";
+import { TORRENT_CATEGORIES } from "@/lib/categories";
 import { getSiteBranding } from "@/lib/db";
 import { toMediaUrl } from "@/lib/media-url";
 
-const categories = ["", "动画", "电影", "电视剧", "音乐", "游戏", "软件", "书籍"];
+const categories = ["", ...TORRENT_CATEGORIES];
 
 export async function SiteHeader() {
   const [user, branding] = await Promise.all([getCurrentUser(), Promise.resolve(getSiteBranding())]);

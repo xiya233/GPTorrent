@@ -1,10 +1,12 @@
 import Image from "next/image";
 import { ProfileForms } from "@/app/settings/profile/profile-forms";
 import { requireActiveUser } from "@/lib/auth";
+import { getUploadPolicy } from "@/lib/db";
 import { toMediaUrl } from "@/lib/media-url";
 
 export default async function ProfilePage() {
   const user = await requireActiveUser();
+  const uploadPolicy = getUploadPolicy();
   const avatarUrl = toMediaUrl(user.avatar_path);
 
   return (
@@ -27,7 +29,7 @@ export default async function ProfilePage() {
         </div>
       </section>
 
-      <ProfileForms bio={user.bio} username={user.username} />
+      <ProfileForms bio={user.bio} maxAvatarUploadMb={uploadPolicy.maxAvatarUploadMb} username={user.username} />
     </div>
   );
 }

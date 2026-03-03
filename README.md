@@ -9,6 +9,11 @@
 - 种子详情页（描述、图片、文件列表、tracker统计）
 - 我的种子（编辑标题/标签/描述/图片、删除）
 - 管理员种子管理（查看全站种子并删除任意记录）
+- 登录/注册验证码（后台可分别开关）
+- 头像裁剪（1:1）与头像 WebP 自动转码
+- 种子图片 WebP 自动转码与详情灯箱缩放
+- 上传策略配置（游客/用户种子大小、图片大小、游客图片开关）
+- 分类扩展（成人、其他）
 
 技术栈：
 - Next.js App Router + Server Actions
@@ -51,6 +56,8 @@ export ADMIN_PASSWORD='Admin1234'
 
 ```bash
 mise exec bun -- bun run tracker:worker
+# 单次执行并打印详细失败原因
+mise exec bun -- bun run tracker:worker --once --verbose
 ```
 
 建议使用 `systemd/pm2/supervisor` 守护该进程。
@@ -78,3 +85,4 @@ export TORRENT_CLEANUP_RETENTION_DAYS=7
 - 种子图片：`data/torrent-images/`
 - 头像文件：`data/avatars/`
 - 站点 LOGO：`data/site/`
+- 验证码挑战：`captcha_challenges`（SQLite 表）

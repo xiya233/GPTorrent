@@ -3,10 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCurrentUserState } from "@/lib/auth";
-import { insertTorrent } from "@/lib/db";
+import { isValidTorrentCategory } from "@/lib/categories";
+import { getUploadPolicy, insertTorrent } from "@/lib/db";
 import { formatBytes, saveUploadedFile } from "@/lib/storage";
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 export type UploadActionState = {
   error: string | null;
@@ -25,6 +24,7 @@ export async function uploadTorrentAction(
   formData: FormData,
 ): Promise<UploadActionState> {
   const { user, blocked } = await getCurrentUserState();
+  const uploadPolicy = getUploadPolicy();
   if (blocked) {
     redirect("/auth/login");
   }
@@ -42,6 +42,9 @@ export async function uploadTorrentAction(
   if (!category) {
     return { error: "请选择分类" };
   }
+  if (!isValidTorrentCategory(category)) {
+    return { error: "分类不合法" };
+  }
   if (!description) {
     return { error: "请填写描述" };
   }
@@ -52,7 +55,7 @@ export async function uploadTorrentAction(
   const saved = await saveUploadedFile({
     file,
     dir: "uploads",
-    maxBytes: MAX_FILE_SIZE,
+    maxBytes: (user ? uploadPolicy.userTorrentFileMaxMb : uploadPolicy.guestTorrentFileMaxMb) * 1024 * 1024,
     allowedExts: [".torrent"],
   });
 

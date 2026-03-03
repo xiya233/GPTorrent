@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { clearSessionCookie, destroySessionFromCookie, setSessionCookie } from "@/lib/auth";
-import { createUser, getUserByUsername } from "@/lib/db";
+import { verifyAndConsumeCaptcha } from "@/lib/captcha";
+import { createUser, getAuthCaptchaPolicy, getUserByUsername } from "@/lib/db";
 import { hashPassword, validatePasswordStrength, verifyPassword } from "@/lib/password";
 
 export type AuthActionState = {
@@ -21,10 +22,24 @@ function validateUsername(username: string) {
   return null;
 }
 
+function validateCaptcha(formData: FormData, purpose: "login" | "register") {
+  const captchaId = ((formData.get("captchaId") as string | null) ?? "").trim();
+  const captchaAnswer = ((formData.get("captchaAnswer") as string | null) ?? "").trim();
+  if (!captchaId || !captchaAnswer) {
+    return false;
+  }
+  return verifyAndConsumeCaptcha({
+    captchaId,
+    answer: captchaAnswer,
+    purpose,
+  });
+}
+
 export async function registerAction(
   _prevState: AuthActionState,
   formData: FormData,
 ): Promise<AuthActionState> {
+  const captchaPolicy = getAuthCaptchaPolicy();
   const username = normalizeUsername((formData.get("username") as string | null) ?? "");
   const password = (formData.get("password") as string | null) ?? "";
   const confirmPassword = (formData.get("confirmPassword") as string | null) ?? "";
@@ -41,6 +56,10 @@ export async function registerAction(
 
   if (password !== confirmPassword) {
     return { error: "两次密码输入不一致" };
+  }
+
+  if (captchaPolicy.enableRegisterCaptcha && !validateCaptcha(formData, "register")) {
+    return { error: "验证码错误或已过期" };
   }
 
   const exists = getUserByUsername(username);
@@ -68,8 +87,17 @@ export async function loginAction(
   _prevState: AuthActionState,
   formData: FormData,
 ): Promise<AuthActionState> {
+  const captchaPolicy = getAuthCaptchaPolicy();
   const username = normalizeUsername((formData.get("username") as string | null) ?? "");
   const password = (formData.get("password") as string | null) ?? "";
+
+  if (!username || !password) {
+    return { error: "用户名或密码错误" };
+  }
+
+  if (captchaPolicy.enableLoginCaptcha && !validateCaptcha(formData, "login")) {
+    return { error: "验证码错误或已过期" };
+  }
 
   const user = getUserByUsername(username);
   if (!user) {

@@ -1,7 +1,7 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MagnetCopyButton } from "@/components/magnet-copy-button";
+import { TorrentImageGallery } from "@/components/torrent-image-gallery";
 import { getCurrentUser } from "@/lib/auth";
 import { getSiteFeatureFlags, getTorrentDetailById } from "@/lib/db";
 import { toMediaUrl } from "@/lib/media-url";
@@ -124,17 +124,15 @@ export default async function TorrentDetailPage({ params }: TorrentDetailPagePro
         {detail.images.length === 0 ? (
           <p className="muted">暂无图片</p>
         ) : (
-          <div className="detail-image-grid">
-            {detail.images.map((img) => {
-              const url = toMediaUrl(img.image_path);
-              if (!url) return null;
-              return (
-                <a className="detail-image-item" href={url} key={img.id} rel="noreferrer" target="_blank">
-                  <Image alt="torrent image" fill src={url} unoptimized />
-                </a>
-              );
-            })}
-          </div>
+          <TorrentImageGallery
+            images={detail.images
+              .map((img) => {
+                const url = toMediaUrl(img.image_path);
+                if (!url) return null;
+                return { id: img.id, url };
+              })
+              .filter((item): item is { id: number; url: string } => Boolean(item))}
+          />
         )}
       </section>
 

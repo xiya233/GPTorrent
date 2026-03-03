@@ -1,10 +1,15 @@
 "use client";
 import { useRef, useState } from "react";
 import { ImagePlus, Upload, X } from "lucide-react";
+import { TORRENT_CATEGORIES } from "@/lib/categories";
 
 type UploadFormProps = {
   isLoggedIn: boolean;
   allowGuestUpload: boolean;
+  allowGuestTorrentImageUpload: boolean;
+  maxTorrentImageUploadMb: number;
+  guestTorrentFileMaxMb: number;
+  userTorrentFileMaxMb: number;
 };
 
 type UploadMetrics = {
@@ -28,7 +33,14 @@ function formatBytes(sizeBytes: number) {
   return `${size.toFixed(precision)} ${units[unitIndex]}`;
 }
 
-export function UploadForm({ isLoggedIn, allowGuestUpload }: UploadFormProps) {
+export function UploadForm({
+  isLoggedIn,
+  allowGuestUpload,
+  allowGuestTorrentImageUpload,
+  maxTorrentImageUploadMb,
+  guestTorrentFileMaxMb,
+  userTorrentFileMaxMb,
+}: UploadFormProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -39,6 +51,10 @@ export function UploadForm({ isLoggedIn, allowGuestUpload }: UploadFormProps) {
   const [metrics, setMetrics] = useState<UploadMetrics | null>(null);
 
   const guestDisabled = !isLoggedIn && !allowGuestUpload;
+  const imageUploadDisabled = !isLoggedIn && !allowGuestTorrentImageUpload;
+  const maxTorrentFileMb = isLoggedIn ? userTorrentFileMaxMb : guestTorrentFileMaxMb;
+  const maxTorrentFileBytes = maxTorrentFileMb * 1024 * 1024;
+  const maxImageBytes = maxTorrentImageUploadMb * 1024 * 1024;
 
   const syncImageInput = (nextImages: File[]) => {
     if (!imageInputRef.current) {
@@ -61,6 +77,9 @@ export function UploadForm({ isLoggedIn, allowGuestUpload }: UploadFormProps) {
   };
 
   const onImageInputChange: React.ChangeEventHandler<HTMLInputElement> = (event) => {
+    if (imageUploadDisabled) {
+      return;
+    }
     const selected = Array.from(event.target.files ?? []);
     if (selected.length === 0) {
       return;
@@ -106,6 +125,19 @@ export function UploadForm({ isLoggedIn, allowGuestUpload }: UploadFormProps) {
 
     if (!file) {
       setError("请先选择一个 .torrent 文件");
+      return;
+    }
+    if (file.size > maxTorrentFileBytes) {
+      setError(`种子文件超过限制，当前角色最大 ${maxTorrentFileMb}MB`);
+      return;
+    }
+    if (imageUploadDisabled && images.length > 0) {
+      setError("管理员已关闭游客上传种子图片功能");
+      return;
+    }
+    const oversized = images.find((img) => img.size > maxImageBytes);
+    if (oversized) {
+      setError(`图片 “${oversized.name}” 超过限制（${maxTorrentImageUploadMb}MB）`);
       return;
     }
 
@@ -166,6 +198,14 @@ export function UploadForm({ isLoggedIn, allowGuestUpload }: UploadFormProps) {
     <form className="upload-form" onSubmit={onSubmit}>
       {!isLoggedIn ? <p className="hint-text">当前为游客上传，发布者会显示为“匿名用户”。</p> : null}
       {guestDisabled ? <p className="form-error">管理员已关闭游客上传，请先登录后上传。</p> : null}
+      {!guestDisabled ? (
+        <p className="hint-text">
+          当前限制：种子文件 ≤ {maxTorrentFileMb}MB，种子图片单张 ≤ {maxTorrentImageUploadMb}MB。
+        </p>
+      ) : null}
+      {!isLoggedIn && imageUploadDisabled ? (
+        <p className="hint-text">管理员已关闭游客上传种子图片功能。</p>
+      ) : null}
 
       <div className="field-group">
         <label htmlFor="torrentFile">种子文件</label>
@@ -187,7 +227,8 @@ export function UploadForm({ isLoggedIn, allowGuestUpload }: UploadFormProps) {
               <p>
                 <strong>点击上传或拖拽文件至此</strong>
               </p>
-              <small>仅支持 .torrent 文件 (最大 10MB)</small>
+              <small>仅支持 .torrent 文件</small>
+              <small>当前上限：{maxTorrentFileMb}MB</small>
             </>
           ) : (
             <div className="selected-file-wrap">
@@ -248,13 +289,11 @@ export function UploadForm({ isLoggedIn, allowGuestUpload }: UploadFormProps) {
             <option disabled value="">
               选择分类
             </option>
-            <option value="动画">动画</option>
-            <option value="电影">电影</option>
-            <option value="电视剧">电视剧</option>
-            <option value="音乐">音乐</option>
-            <option value="游戏">游戏</option>
-            <option value="软件">软件</option>
-            <option value="书籍">书籍</option>
+            {TORRENT_CATEGORIES.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -280,7 +319,7 @@ export function UploadForm({ isLoggedIn, allowGuestUpload }: UploadFormProps) {
           <label htmlFor="images">种子图片（最多9张）</label>
           <input
             accept="image/jpeg,image/png,image/webp,image/svg+xml"
-            disabled={uploading || guestDisabled || images.length >= MAX_IMAGE_COUNT}
+            disabled={uploading || guestDisabled || imageUploadDisabled || images.length >= MAX_IMAGE_COUNT}
             id="images"
             multiple
             name="images"
@@ -288,7 +327,7 @@ export function UploadForm({ isLoggedIn, allowGuestUpload }: UploadFormProps) {
             ref={imageInputRef}
             type="file"
           />
-          <small>支持 jpg/png/webp/svg，单张最大 2MB。</small>
+          <small>支持 jpg/png/webp/svg，单张最大 {maxTorrentImageUploadMb}MB。</small>
 
           {images.length > 0 ? (
             <div className="image-preview-grid">

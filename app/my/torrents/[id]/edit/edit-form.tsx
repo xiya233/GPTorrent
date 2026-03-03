@@ -8,6 +8,7 @@ type EditTorrentFormProps = {
   name: string;
   tags: string;
   description: string;
+  maxTorrentImageUploadMb: number;
   images: Array<{
     id: number;
     url: string;
@@ -16,7 +17,14 @@ type EditTorrentFormProps = {
 
 const MAX_IMAGE_COUNT = 9;
 
-export function EditTorrentForm({ actionUrl, name, tags, description, images }: EditTorrentFormProps) {
+export function EditTorrentForm({
+  actionUrl,
+  name,
+  tags,
+  description,
+  maxTorrentImageUploadMb,
+  images,
+}: EditTorrentFormProps) {
   const [removeIds, setRemoveIds] = useState<number[]>([]);
   const [newImages, setNewImages] = useState<File[]>([]);
 
@@ -85,6 +93,7 @@ export function EditTorrentForm({ actionUrl, name, tags, description, images }: 
             }}
             type="file"
           />
+          <small>图片单张上限 {maxTorrentImageUploadMb}MB，保存后自动转换为 WebP。</small>
           {newImages.length > 0 ? (
             <div className="new-image-list">
               {newImages.map((img) => (
