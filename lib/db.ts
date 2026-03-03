@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { Database } from "bun:sqlite";
+import { TORRENT_CATEGORIES } from "@/lib/categories";
 import { hashPassword, validatePasswordStrength } from "@/lib/password";
 
 const dataDir = path.join(process.cwd(), "data");
@@ -113,6 +114,7 @@ export type SiteFeatureFlags = {
   allowGuestUpload: boolean;
   allowUserDeleteTorrent: boolean;
   allowGuestTorrentImageUpload: boolean;
+  allowUserRegister: boolean;
 };
 
 export type UploadPolicy = {
@@ -339,6 +341,11 @@ ensureColumn(
   "user_torrent_file_max_mb",
   "ALTER TABLE site_settings ADD COLUMN user_torrent_file_max_mb INTEGER NOT NULL DEFAULT 10",
 );
+ensureColumn(
+  "site_settings",
+  "allow_user_register",
+  "ALTER TABLE site_settings ADD COLUMN allow_user_register INTEGER NOT NULL DEFAULT 1",
+);
 
 db.exec(
   "CREATE UNIQUE INDEX IF NOT EXISTS idx_torrents_info_hash_unique ON torrents(info_hash) WHERE status = 'active' AND info_hash IS NOT NULL AND info_hash != ''",
@@ -347,7 +354,7 @@ db.exec(
 const settingsExists = db.query("SELECT id FROM site_settings WHERE id = 1").get() as { id: number } | null;
 if (!settingsExists) {
   db.query(
-    "INSERT INTO site_settings (id, title_text, logo_path, allow_guest_upload, allow_user_delete_torrent, enable_login_captcha, enable_register_captcha, max_avatar_upload_mb, max_torrent_image_upload_mb, allow_guest_torrent_image_upload, guest_torrent_file_max_mb, user_torrent_file_max_mb, updated_at) VALUES (1, 'Sukebei.dl', '', 1, 1, 1, 1, 2, 2, 1, 1, 10, ?)",
+    "INSERT INTO site_settings (id, title_text, logo_path, allow_guest_upload, allow_user_delete_torrent, enable_login_captcha, enable_register_captcha, max_avatar_upload_mb, max_torrent_image_upload_mb, allow_guest_torrent_image_upload, guest_torrent_file_max_mb, user_torrent_file_max_mb, allow_user_register, updated_at) VALUES (1, 'Sukebei.dl', '', 1, 1, 1, 1, 2, 2, 1, 1, 10, 1, ?)",
   ).run(new Date().toISOString());
 }
 
@@ -413,6 +420,13 @@ function bootstrapAdminUser() {
   createUser({ username, passwordHash: hashPassword(password), role: "admin" });
 }
 
+function splitTags(tags: string) {
+  return tags
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
 export function listTorrents(params: { q?: string; category?: string; limit?: number } = {}) {
   const q = params.q?.trim() ?? "";
   const category = params.category?.trim() ?? "";
@@ -431,6 +445,86 @@ export function listTorrents(params: { q?: string; category?: string; limit?: nu
     .all({ $q: q, $category: category, $limit: limit });
 
   return rows as TorrentRow[];
+}
+
+export function listCategoryStats() {
+  const rows = db
+    .query(`
+      SELECT category, COUNT(1) AS count
+      FROM torrents
+      WHERE status = 'active'
+      GROUP BY category
+    `)
+    .all() as Array<{ category: string; count: number }>;
+
+  const counts = new Map<string, number>();
+  rows.forEach((row) => counts.set(row.category, row.count));
+
+  const ordered: Array<{ category: string; count: number }> = TORRENT_CATEGORIES.map((category) => ({
+    category,
+    count: counts.get(category) ?? 0,
+  }));
+  const knownCategories = new Set<string>(TORRENT_CATEGORIES);
+
+  rows.forEach((row) => {
+    if (knownCategories.has(row.category)) {
+      return;
+    }
+    ordered.push({
+      category: row.category,
+      count: row.count,
+    });
+  });
+
+  return ordered;
+}
+
+export function listTagStats() {
+  const rows = db
+    .query(`
+      SELECT tags
+      FROM torrents
+      WHERE status = 'active'
+        AND tags != ''
+    `)
+    .all() as Array<{ tags: string }>;
+
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const uniqueTags = new Set(splitTags(row.tags));
+    uniqueTags.forEach((tag) => {
+      counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    });
+  }
+
+  return Array.from(counts.entries())
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => {
+      if (b.count !== a.count) {
+        return b.count - a.count;
+      }
+      return a.tag.localeCompare(b.tag, "zh-CN");
+    });
+}
+
+export function listTorrentsByTag(tag: string, limit = 120) {
+  const target = tag.trim();
+  if (!target) {
+    return [] as TorrentRow[];
+  }
+
+  const rows = db
+    .query(`
+      SELECT *
+      FROM torrents
+      WHERE status = 'active'
+      ORDER BY datetime(created_at) DESC, id DESC
+    `)
+    .all() as TorrentRow[];
+
+  const matched = rows.filter((row) => splitTags(row.tags).some((item) => item === target));
+  const safeLimit = Math.min(Math.max(limit, 1), 300);
+  return matched.slice(0, safeLimit);
 }
 
 export function listMyTorrents(userId: number) {
@@ -477,6 +571,11 @@ export function getTorrentById(id: number) {
 
 export function getTorrentByInfoHash(infoHash: string) {
   const row = db.query("SELECT * FROM torrents WHERE info_hash = ? LIMIT 1").get(infoHash);
+  return (row as TorrentRow | null) ?? null;
+}
+
+export function getActiveTorrentByInfoHash(infoHash: string) {
+  const row = db.query("SELECT * FROM torrents WHERE info_hash = ? AND status = 'active' LIMIT 1").get(infoHash);
   return (row as TorrentRow | null) ?? null;
 }
 
@@ -1120,7 +1219,7 @@ export function deleteExpiredCaptchaChallenges(nowIso: string) {
 export function getSiteSettings(): SiteSettings {
   const row = db
     .query(
-      "SELECT title_text AS titleText, logo_path AS logoPath, allow_guest_upload AS allowGuestUpload, allow_user_delete_torrent AS allowUserDeleteTorrent, enable_login_captcha AS enableLoginCaptcha, enable_register_captcha AS enableRegisterCaptcha, max_avatar_upload_mb AS maxAvatarUploadMb, max_torrent_image_upload_mb AS maxTorrentImageUploadMb, allow_guest_torrent_image_upload AS allowGuestTorrentImageUpload, guest_torrent_file_max_mb AS guestTorrentFileMaxMb, user_torrent_file_max_mb AS userTorrentFileMaxMb FROM site_settings WHERE id = 1",
+      "SELECT title_text AS titleText, logo_path AS logoPath, allow_guest_upload AS allowGuestUpload, allow_user_delete_torrent AS allowUserDeleteTorrent, enable_login_captcha AS enableLoginCaptcha, enable_register_captcha AS enableRegisterCaptcha, max_avatar_upload_mb AS maxAvatarUploadMb, max_torrent_image_upload_mb AS maxTorrentImageUploadMb, allow_guest_torrent_image_upload AS allowGuestTorrentImageUpload, guest_torrent_file_max_mb AS guestTorrentFileMaxMb, user_torrent_file_max_mb AS userTorrentFileMaxMb, allow_user_register AS allowUserRegister FROM site_settings WHERE id = 1",
     )
     .get() as
     | {
@@ -1135,6 +1234,7 @@ export function getSiteSettings(): SiteSettings {
         allowGuestTorrentImageUpload: number;
         guestTorrentFileMaxMb: number;
         userTorrentFileMaxMb: number;
+        allowUserRegister: number;
       }
     | null;
 
@@ -1151,6 +1251,7 @@ export function getSiteSettings(): SiteSettings {
       allowGuestTorrentImageUpload: true,
       guestTorrentFileMaxMb: 1,
       userTorrentFileMaxMb: 10,
+      allowUserRegister: true,
     };
   }
 
@@ -1166,6 +1267,7 @@ export function getSiteSettings(): SiteSettings {
     allowGuestTorrentImageUpload: row.allowGuestTorrentImageUpload === 1,
     guestTorrentFileMaxMb: Math.max(1, row.guestTorrentFileMaxMb),
     userTorrentFileMaxMb: Math.max(1, row.userTorrentFileMaxMb),
+    allowUserRegister: row.allowUserRegister === 1,
   };
 }
 
@@ -1183,6 +1285,7 @@ export function getSiteFeatureFlags(): SiteFeatureFlags {
     allowGuestUpload: s.allowGuestUpload,
     allowUserDeleteTorrent: s.allowUserDeleteTorrent,
     allowGuestTorrentImageUpload: s.allowGuestTorrentImageUpload,
+    allowUserRegister: s.allowUserRegister,
   };
 }
 
@@ -1217,6 +1320,7 @@ export function updateSiteSettings(input: {
   allowGuestTorrentImageUpload?: boolean;
   guestTorrentFileMaxMb?: number;
   userTorrentFileMaxMb?: number;
+  allowUserRegister?: boolean;
 }) {
   const current = getSiteSettings();
 
@@ -1251,9 +1355,11 @@ export function updateSiteSettings(input: {
     1,
     Math.floor(input.userTorrentFileMaxMb ?? current.userTorrentFileMaxMb),
   );
+  const allowUserRegister =
+    typeof input.allowUserRegister === "boolean" ? input.allowUserRegister : current.allowUserRegister;
 
   db.query(
-    "UPDATE site_settings SET title_text = ?, logo_path = ?, allow_guest_upload = ?, allow_user_delete_torrent = ?, enable_login_captcha = ?, enable_register_captcha = ?, max_avatar_upload_mb = ?, max_torrent_image_upload_mb = ?, allow_guest_torrent_image_upload = ?, guest_torrent_file_max_mb = ?, user_torrent_file_max_mb = ?, updated_at = ? WHERE id = 1",
+    "UPDATE site_settings SET title_text = ?, logo_path = ?, allow_guest_upload = ?, allow_user_delete_torrent = ?, enable_login_captcha = ?, enable_register_captcha = ?, max_avatar_upload_mb = ?, max_torrent_image_upload_mb = ?, allow_guest_torrent_image_upload = ?, guest_torrent_file_max_mb = ?, user_torrent_file_max_mb = ?, allow_user_register = ?, updated_at = ? WHERE id = 1",
   ).run(
     titleText,
     logoPath,
@@ -1266,6 +1372,7 @@ export function updateSiteSettings(input: {
     allowGuestTorrentImageUpload ? 1 : 0,
     guestTorrentFileMaxMb,
     userTorrentFileMaxMb,
+    allowUserRegister ? 1 : 0,
     new Date().toISOString(),
   );
 }

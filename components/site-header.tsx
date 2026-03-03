@@ -6,13 +6,17 @@ import { HeaderUserMenu } from "@/components/header-user-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { getCurrentUser } from "@/lib/auth";
 import { TORRENT_CATEGORIES } from "@/lib/categories";
-import { getSiteBranding } from "@/lib/db";
+import { getSiteBranding, getSiteSettings } from "@/lib/db";
 import { toMediaUrl } from "@/lib/media-url";
 
 const categories = ["", ...TORRENT_CATEGORIES];
 
 export async function SiteHeader() {
-  const [user, branding] = await Promise.all([getCurrentUser(), Promise.resolve(getSiteBranding())]);
+  const [user, branding, settings] = await Promise.all([
+    getCurrentUser(),
+    Promise.resolve(getSiteBranding()),
+    Promise.resolve(getSiteSettings()),
+  ]);
   const logoUrl = toMediaUrl(branding.logoPath);
   const avatarUrl = user ? toMediaUrl(user.avatar_path) : "";
 
@@ -33,6 +37,12 @@ export async function SiteHeader() {
         <nav className="top-nav">
           <Link className="nav-link" href="/">
             种子
+          </Link>
+          <Link className="nav-link" href="/categories">
+            分类
+          </Link>
+          <Link className="nav-link" href="/tags">
+            标签
           </Link>
           <Link className="nav-link" href="/upload">
             上传
@@ -67,9 +77,11 @@ export async function SiteHeader() {
               <Link className="secondary-btn header-auth-btn" href="/auth/login">
                 登录
               </Link>
-              <Link className="primary-btn header-auth-btn" href="/auth/register">
-                注册
-              </Link>
+              {settings.allowUserRegister ? (
+                <Link className="primary-btn header-auth-btn" href="/auth/register">
+                  注册
+                </Link>
+              ) : null}
             </div>
           )}
         </div>

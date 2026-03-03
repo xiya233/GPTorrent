@@ -395,6 +395,67 @@ tbody tr:last-child td {
   font-size: 0.86rem;
 }
 
+.taxonomy-page {
+  max-width: 1000px;
+}
+
+.taxonomy-grid {
+  padding: 14px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.taxonomy-item {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  gap: 4px;
+  transition: 0.2s ease;
+}
+
+.taxonomy-item strong {
+  font-size: 0.95rem;
+}
+
+.taxonomy-item span {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.taxonomy-item:hover {
+  border-color: color-mix(in srgb, var(--text-primary) 24%, var(--border));
+  transform: translateY(-1px);
+}
+
+.tag-cloud {
+  padding: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tag-pill {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: 0.2s ease;
+}
+
+.tag-pill:hover {
+  border-color: color-mix(in srgb, var(--text-primary) 24%, var(--border));
+  background: color-mix(in srgb, var(--text-primary) 7%, transparent);
+}
+
+.tag-pill small {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
 .primary-btn,
 .secondary-btn {
   border: 1px solid transparent;
@@ -1377,7 +1438,8 @@ tbody tr:last-child td {
   .admin-grid,
   .site-grid,
   .admin-links,
-  .admin-overview {
+  .admin-overview,
+  .taxonomy-grid {
     grid-template-columns: 1fr;
   }
 

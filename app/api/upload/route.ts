@@ -3,7 +3,7 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 import { SESSION_COOKIE_NAME, getUserStateFromToken } from "@/lib/auth";
 import { isValidTorrentCategory } from "@/lib/categories";
-import { createTorrentWithMeta, getSiteFeatureFlags, getTorrentByInfoHash, getUploadPolicy } from "@/lib/db";
+import { createTorrentWithMeta, getActiveTorrentByInfoHash, getSiteFeatureFlags, getUploadPolicy } from "@/lib/db";
 import { saveUploadedImageAsWebp } from "@/lib/image-upload";
 import { parseTorrentMeta } from "@/lib/torrent";
 import { formatBytes, saveUploadedFile } from "@/lib/storage";
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "种子文件解析失败，请确认文件有效" }, { status: 400 });
   }
 
-  const duplicated = getTorrentByInfoHash(meta.infoHash);
+  const duplicated = getActiveTorrentByInfoHash(meta.infoHash);
   if (duplicated) {
     return NextResponse.json({ error: "该种子已存在，禁止重复上传" }, { status: 409 });
   }

@@ -24,6 +24,7 @@ export default async function AdminSitePage() {
         <SiteForm
           allowGuestUpload={settings.allowGuestUpload}
           allowGuestTorrentImageUpload={settings.allowGuestTorrentImageUpload}
+          allowUserRegister={settings.allowUserRegister}
           allowUserDeleteTorrent={settings.allowUserDeleteTorrent}
           enableLoginCaptcha={settings.enableLoginCaptcha}
           enableRegisterCaptcha={settings.enableRegisterCaptcha}

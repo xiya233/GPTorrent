@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { clearSessionCookie, destroySessionFromCookie, setSessionCookie } from "@/lib/auth";
 import { verifyAndConsumeCaptcha } from "@/lib/captcha";
-import { createUser, getAuthCaptchaPolicy, getUserByUsername } from "@/lib/db";
+import { createUser, getAuthCaptchaPolicy, getSiteSettings, getUserByUsername } from "@/lib/db";
 import { hashPassword, validatePasswordStrength, verifyPassword } from "@/lib/password";
 
 export type AuthActionState = {
@@ -39,6 +39,11 @@ export async function registerAction(
   _prevState: AuthActionState,
   formData: FormData,
 ): Promise<AuthActionState> {
+  const settings = getSiteSettings();
+  if (!settings.allowUserRegister) {
+    return { error: "当前站点已关闭注册" };
+  }
+
   const captchaPolicy = getAuthCaptchaPolicy();
   const username = normalizeUsername((formData.get("username") as string | null) ?? "");
   const password = (formData.get("password") as string | null) ?? "";

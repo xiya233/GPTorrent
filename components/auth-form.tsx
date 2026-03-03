@@ -24,7 +24,7 @@ export function AuthForm({ mode, captchaEnabled }: AuthFormProps) {
     initialState,
   );
   const [captcha, setCaptcha] = useState<CaptchaState | null>(null);
-  const [captchaLoading, setCaptchaLoading] = useState(false);
+  const [captchaLoading, setCaptchaLoading] = useState(captchaEnabled);
   const [captchaError, setCaptchaError] = useState<string | null>(null);
 
   const loadCaptcha = useCallback(async () => {
@@ -56,6 +56,7 @@ export function AuthForm({ mode, captchaEnabled }: AuthFormProps) {
   useEffect(() => {
     if (!captchaEnabled) {
       setCaptcha(null);
+      setCaptchaLoading(false);
       return;
     }
     void loadCaptcha();
@@ -78,7 +79,6 @@ export function AuthForm({ mode, captchaEnabled }: AuthFormProps) {
           autoComplete="username"
           id="username"
           name="username"
-          placeholder="例如: alice_01"
           required
           type="text"
         />
@@ -110,9 +110,9 @@ export function AuthForm({ mode, captchaEnabled }: AuthFormProps) {
             <div className="captcha-image-wrap" role="img">
               {captcha?.imageSvg ? (
                 <div dangerouslySetInnerHTML={{ __html: captcha.imageSvg }} />
-              ) : (
-                <span className="muted">{captchaLoading ? "加载中..." : "验证码不可用"}</span>
-              )}
+              ) : captchaLoading ? (
+                <span className="muted">加载中...</span>
+              ) : null}
             </div>
             <button
               className="secondary-btn tiny-btn"

@@ -10,6 +10,7 @@ type SiteFormProps = {
   titleText: string;
   allowGuestUpload: boolean;
   allowUserDeleteTorrent: boolean;
+  allowUserRegister: boolean;
   enableLoginCaptcha: boolean;
   enableRegisterCaptcha: boolean;
   maxAvatarUploadMb: number;
@@ -23,6 +24,7 @@ export function SiteForm({
   titleText,
   allowGuestUpload,
   allowUserDeleteTorrent,
+  allowUserRegister,
   enableLoginCaptcha,
   enableRegisterCaptcha,
   maxAvatarUploadMb,
@@ -87,6 +89,14 @@ export function SiteForm({
         <span>
           <strong>允许已注册用户删除自己的种子</strong>
           <small>关闭后，仅管理员可删除种子。</small>
+        </span>
+      </label>
+
+      <label className="checkbox-row" htmlFor="allowUserRegister">
+        <input defaultChecked={allowUserRegister} id="allowUserRegister" name="allowUserRegister" type="checkbox" />
+        <span>
+          <strong>允许用户注册</strong>
+          <small>关闭后，访客将无法创建新账号。</small>
         </span>
       </label>
 

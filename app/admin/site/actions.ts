@@ -32,6 +32,7 @@ export async function adminUpdateSiteBrandingAction(
   const allowGuestUpload = formData.get("allowGuestUpload") === "on";
   const allowUserDeleteTorrent = formData.get("allowUserDeleteTorrent") === "on";
   const allowGuestTorrentImageUpload = formData.get("allowGuestTorrentImageUpload") === "on";
+  const allowUserRegister = formData.get("allowUserRegister") === "on";
   const enableLoginCaptcha = formData.get("enableLoginCaptcha") === "on";
   const enableRegisterCaptcha = formData.get("enableRegisterCaptcha") === "on";
   const maxAvatarUploadMb = parsePositiveInt(formData, "maxAvatarUploadMb", 2);
@@ -70,6 +71,7 @@ export async function adminUpdateSiteBrandingAction(
     allowGuestUpload,
     allowUserDeleteTorrent,
     allowGuestTorrentImageUpload,
+    allowUserRegister,
     enableLoginCaptcha,
     enableRegisterCaptcha,
     maxAvatarUploadMb,

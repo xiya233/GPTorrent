@@ -33,6 +33,10 @@ function formatBytes(sizeBytes: number) {
   return `${size.toFixed(precision)} ${units[unitIndex]}`;
 }
 
+function deriveTorrentTitle(fileName: string) {
+  return fileName.replace(/\.torrent$/i, "").trim();
+}
+
 export function UploadForm({
   isLoggedIn,
   allowGuestUpload,
@@ -45,6 +49,8 @@ export function UploadForm({
   const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   const [file, setFile] = useState<File | null>(null);
+  const [name, setName] = useState("");
+  const [nameEdited, setNameEdited] = useState(false);
   const [images, setImages] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -71,6 +77,16 @@ export function UploadForm({
     setError(null);
     setMetrics(null);
     setFile(nextFile);
+
+    if (!nextFile) {
+      return;
+    }
+
+    const autoName = deriveTorrentTitle(nextFile.name);
+    if (!nameEdited || name.trim() === "") {
+      setName(autoName);
+      setNameEdited(false);
+    }
   };
 
   const onInputChange: React.ChangeEventHandler<HTMLInputElement> = (event) => {
@@ -301,6 +317,11 @@ export function UploadForm({
             placeholder="[字幕组] 标题 - 集数 [分辨率] [编码]"
             required
             type="text"
+            value={name}
+            onChange={(event) => {
+              setName(event.target.value);
+              setNameEdited(true);
+            }}
           />
         </div>
 
@@ -412,6 +433,8 @@ export function UploadForm({
             setError(null);
             setMetrics(null);
             setFile(null);
+            setName("");
+            setNameEdited(false);
             setImages([]);
           }}
           type="reset"
