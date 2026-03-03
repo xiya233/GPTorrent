@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rm } from "node:fs/promises";
+import path from "node:path";
 import { SESSION_COOKIE_NAME, getUserStateFromToken } from "@/lib/auth";
 import { isValidTorrentCategory } from "@/lib/categories";
 import { createTorrentWithMeta, getSiteFeatureFlags, getTorrentByInfoHash, getUploadPolicy } from "@/lib/db";
@@ -7,6 +9,31 @@ import { parseTorrentMeta } from "@/lib/torrent";
 import { formatBytes, saveUploadedFile } from "@/lib/storage";
 
 const MAX_IMAGE_COUNT = 9;
+
+function resolveDataPath(relativePath: string) {
+  const normalized = relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
+  const target = path.resolve(process.cwd(), "data", normalized);
+  const dataRoot = path.resolve(process.cwd(), "data");
+  if (!target.startsWith(`${dataRoot}${path.sep}`) && target !== dataRoot) {
+    return null;
+  }
+  return target;
+}
+
+async function removeSavedRelativePath(relativePath: string) {
+  if (!relativePath) {
+    return;
+  }
+  const target = resolveDataPath(relativePath);
+  if (!target) {
+    return;
+  }
+  try {
+    await rm(target, { force: true });
+  } catch {
+    // ignore cleanup errors
+  }
+}
 
 function normalizeTags(input: string) {
   return input
@@ -65,7 +92,7 @@ export async function POST(request: NextRequest) {
   }
 
   const duplicated = getTorrentByInfoHash(meta.infoHash);
-  if (duplicated && duplicated.status === "active") {
+  if (duplicated) {
     return NextResponse.json({ error: "该种子已存在，禁止重复上传" }, { status: 409 });
   }
 
@@ -115,23 +142,41 @@ export async function POST(request: NextRequest) {
 
   const isAnonymous = user ? isAnonymousInput : true;
 
-  const torrentId = createTorrentWithMeta({
-    name,
-    category,
-    sizeBytes: file.size,
-    sizeDisplay: formatBytes(file.size),
-    tags: normalizeTags(tagsRaw),
-    description,
-    uploaderName: user ? user.username : "访客",
-    uploaderUserId: user?.id ?? null,
-    isAnonymous,
-    filePath: savedTorrent.relativePath,
-    infoHash: meta.infoHash,
-    magnetUri: meta.magnetUri,
-    trackers: meta.trackers,
-    files: meta.files,
-    imagePaths,
-  });
+  try {
+    const torrentId = createTorrentWithMeta({
+      name,
+      category,
+      sizeBytes: file.size,
+      sizeDisplay: formatBytes(file.size),
+      tags: normalizeTags(tagsRaw),
+      description,
+      uploaderName: user ? user.username : "访客",
+      uploaderUserId: user?.id ?? null,
+      isAnonymous,
+      filePath: savedTorrent.relativePath,
+      infoHash: meta.infoHash,
+      magnetUri: meta.magnetUri,
+      trackers: meta.trackers,
+      files: meta.files,
+      imagePaths,
+    });
 
-  return NextResponse.json({ ok: true, redirect: `/torrent/${torrentId}` });
+    return NextResponse.json({ ok: true, redirect: `/torrent/${torrentId}` });
+  } catch (error) {
+    await Promise.all([
+      removeSavedRelativePath(savedTorrent.relativePath),
+      ...imagePaths.map((item) => removeSavedRelativePath(item)),
+    ]);
+
+    const maybeSqlite = error as { code?: string; message?: string };
+    if (
+      maybeSqlite.code === "SQLITE_CONSTRAINT_UNIQUE" &&
+      maybeSqlite.message?.includes("torrents.info_hash")
+    ) {
+      return NextResponse.json({ error: "该种子已存在，禁止重复上传" }, { status: 409 });
+    }
+
+    console.error("[upload] createTorrentWithMeta failed:", error);
+    return NextResponse.json({ error: "上传失败，请稍后重试" }, { status: 500 });
+  }
 }

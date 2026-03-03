@@ -81,6 +81,7 @@ export function ProfileForms({ username, bio, maxAvatarUploadMb }: ProfileFormsP
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [avatarClientError, setAvatarClientError] = useState<string | null>(null);
+  const [isCropModalOpen, setIsCropModalOpen] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -92,6 +93,26 @@ export function ProfileForms({ username, bio, maxAvatarUploadMb }: ProfileFormsP
       }
     };
   }, [sourceAvatarUrl, previewAvatarUrl]);
+
+  useEffect(() => {
+    if (!isCropModalOpen) {
+      return;
+    }
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        cancelAvatarCrop();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isCropModalOpen]);
 
   const syncAvatarInput = (file: File | null) => {
     const input = avatarInputRef.current;
@@ -129,6 +150,7 @@ export function ProfileForms({ username, bio, maxAvatarUploadMb }: ProfileFormsP
     setSourceAvatarUrl(objectUrl);
     setCrop({ x: 0, y: 0 });
     setZoom(1);
+    setIsCropModalOpen(true);
   };
 
   const applyAvatarCrop = async () => {
@@ -146,6 +168,8 @@ export function ProfileForms({ username, bio, maxAvatarUploadMb }: ProfileFormsP
       setPreviewAvatarUrl(preview);
       URL.revokeObjectURL(sourceAvatarUrl);
       setSourceAvatarUrl("");
+      setIsCropModalOpen(false);
+      avatarInputRef.current?.focus();
     } catch {
       setAvatarClientError("头像裁剪失败，请重新选择");
       syncAvatarInput(null);
@@ -158,13 +182,25 @@ export function ProfileForms({ username, bio, maxAvatarUploadMb }: ProfileFormsP
       URL.revokeObjectURL(sourceAvatarUrl);
     }
     setSourceAvatarUrl("");
+    setIsCropModalOpen(false);
+    if (avatarInputRef.current) {
+      avatarInputRef.current.value = "";
+      avatarInputRef.current.focus();
+    }
+  };
+
+  const handleProfileSubmit: React.FormEventHandler<HTMLFormElement> = (event) => {
+    if (sourceAvatarUrl || isCropModalOpen) {
+      event.preventDefault();
+      setAvatarClientError("请先在裁剪弹窗中应用头像裁剪后再保存");
+    }
   };
 
   return (
     <div className="profile-grid">
       <section className="card profile-section">
         <h2>个人资料</h2>
-        <form action={profileAction} className="stack-form">
+        <form action={profileAction} className="stack-form" onSubmit={handleProfileSubmit}>
           <div className="field-group">
             <label htmlFor="username">用户名</label>
             <input disabled id="username" value={username} />
@@ -188,45 +224,6 @@ export function ProfileForms({ username, bio, maxAvatarUploadMb }: ProfileFormsP
               </div>
             ) : null}
           </div>
-
-          {sourceAvatarUrl ? (
-            <div className="field-group">
-              <label>头像裁剪</label>
-              <div className="avatar-crop-stage">
-                <Cropper
-                  aspect={1}
-                  crop={crop}
-                  image={sourceAvatarUrl}
-                  onCropChange={setCrop}
-                  onCropComplete={(_, croppedPixels) => setCroppedAreaPixels(croppedPixels)}
-                  onZoomChange={setZoom}
-                  zoom={zoom}
-                />
-              </div>
-              <div className="avatar-crop-controls">
-                <label className="muted" htmlFor="avatarZoom">
-                  缩放
-                </label>
-                <input
-                  id="avatarZoom"
-                  max={3}
-                  min={1}
-                  onChange={(event) => setZoom(Number(event.target.value))}
-                  step={0.1}
-                  type="range"
-                  value={zoom}
-                />
-                <div className="avatar-crop-actions">
-                  <button className="secondary-btn tiny-btn" onClick={cancelAvatarCrop} type="button">
-                    取消
-                  </button>
-                  <button className="primary-btn tiny-btn" onClick={() => void applyAvatarCrop()} type="button">
-                    应用裁剪
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : null}
 
           <div className="field-group">
             <label htmlFor="bio">Bio</label>
@@ -270,6 +267,57 @@ export function ProfileForms({ username, bio, maxAvatarUploadMb }: ProfileFormsP
           </button>
         </form>
       </section>
+
+      {isCropModalOpen && sourceAvatarUrl ? (
+        <div
+          className="avatar-crop-modal-overlay"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              cancelAvatarCrop();
+            }
+          }}
+        >
+          <div aria-modal="true" className="avatar-crop-modal" role="dialog">
+            <h3>裁剪头像</h3>
+            <p>请先完成 1:1 裁剪，再保存个人资料。</p>
+
+            <div className="avatar-crop-stage">
+              <Cropper
+                aspect={1}
+                crop={crop}
+                image={sourceAvatarUrl}
+                onCropChange={setCrop}
+                onCropComplete={(_, croppedPixels) => setCroppedAreaPixels(croppedPixels)}
+                onZoomChange={setZoom}
+                zoom={zoom}
+              />
+            </div>
+
+            <div className="avatar-crop-controls">
+              <label className="muted" htmlFor="avatarZoom">
+                缩放
+              </label>
+              <input
+                id="avatarZoom"
+                max={3}
+                min={1}
+                onChange={(event) => setZoom(Number(event.target.value))}
+                step={0.1}
+                type="range"
+                value={zoom}
+              />
+              <div className="avatar-crop-actions">
+                <button className="secondary-btn tiny-btn" onClick={cancelAvatarCrop} type="button">
+                  取消
+                </button>
+                <button className="primary-btn tiny-btn" onClick={() => void applyAvatarCrop()} type="button">
+                  应用裁剪
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

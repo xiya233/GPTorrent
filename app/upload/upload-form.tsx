@@ -55,6 +55,7 @@ export function UploadForm({
   const maxTorrentFileMb = isLoggedIn ? userTorrentFileMaxMb : guestTorrentFileMaxMb;
   const maxTorrentFileBytes = maxTorrentFileMb * 1024 * 1024;
   const maxImageBytes = maxTorrentImageUploadMb * 1024 * 1024;
+  const imageLimitExceeded = images.length > MAX_IMAGE_COUNT;
 
   const syncImageInput = (nextImages: File[]) => {
     if (!imageInputRef.current) {
@@ -81,19 +82,31 @@ export function UploadForm({
       return;
     }
     const selected = Array.from(event.target.files ?? []);
+    appendImages(selected);
+  };
+
+  const appendImages = (selected: File[]) => {
     if (selected.length === 0) {
       return;
     }
 
-    const merged = [...images, ...selected].slice(0, MAX_IMAGE_COUNT);
+    const merged = [...images, ...selected];
     setImages(merged);
     syncImageInput(merged);
+    if (merged.length > MAX_IMAGE_COUNT) {
+      setError(`最多上传 ${MAX_IMAGE_COUNT} 张图片`);
+    } else {
+      setError(null);
+    }
   };
 
   const removeImage = (index: number) => {
     const next = images.filter((_, i) => i !== index);
     setImages(next);
     syncImageInput(next);
+    if (next.length <= MAX_IMAGE_COUNT) {
+      setError((current) => (current === `最多上传 ${MAX_IMAGE_COUNT} 张图片` ? null : current));
+    }
   };
 
   const onDrop: React.DragEventHandler<HTMLLabelElement> = (event) => {
@@ -116,6 +129,15 @@ export function UploadForm({
     onFileChanged(dropped);
   };
 
+  const onImageDrop: React.DragEventHandler<HTMLLabelElement> = (event) => {
+    event.preventDefault();
+    if (uploading || guestDisabled || imageUploadDisabled) {
+      return;
+    }
+    const dropped = Array.from(event.dataTransfer.files ?? []);
+    appendImages(dropped);
+  };
+
   const onSubmit: React.FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -133,6 +155,10 @@ export function UploadForm({
     }
     if (imageUploadDisabled && images.length > 0) {
       setError("管理员已关闭游客上传种子图片功能");
+      return;
+    }
+    if (imageLimitExceeded) {
+      setError(`最多上传 ${MAX_IMAGE_COUNT} 张图片`);
       return;
     }
     const oversized = images.find((img) => img.size > maxImageBytes);
@@ -198,11 +224,6 @@ export function UploadForm({
     <form className="upload-form" onSubmit={onSubmit}>
       {!isLoggedIn ? <p className="hint-text">当前为游客上传，发布者会显示为“匿名用户”。</p> : null}
       {guestDisabled ? <p className="form-error">管理员已关闭游客上传，请先登录后上传。</p> : null}
-      {!guestDisabled ? (
-        <p className="hint-text">
-          当前限制：种子文件 ≤ {maxTorrentFileMb}MB，种子图片单张 ≤ {maxTorrentImageUploadMb}MB。
-        </p>
-      ) : null}
       {!isLoggedIn && imageUploadDisabled ? (
         <p className="hint-text">管理员已关闭游客上传种子图片功能。</p>
       ) : null}
@@ -228,7 +249,7 @@ export function UploadForm({
                 <strong>点击上传或拖拽文件至此</strong>
               </p>
               <small>仅支持 .torrent 文件</small>
-              <small>当前上限：{maxTorrentFileMb}MB</small>
+              <small>单个种子文件大小：{maxTorrentFileMb}MB</small>
             </>
           ) : (
             <div className="selected-file-wrap">
@@ -317,17 +338,33 @@ export function UploadForm({
 
         <div className="field-group span-2">
           <label htmlFor="images">种子图片（最多9张）</label>
-          <input
-            accept="image/jpeg,image/png,image/webp,image/svg+xml"
-            disabled={uploading || guestDisabled || imageUploadDisabled || images.length >= MAX_IMAGE_COUNT}
-            id="images"
-            multiple
-            name="images"
-            onChange={onImageInputChange}
-            ref={imageInputRef}
-            type="file"
-          />
-          <small>支持 jpg/png/webp/svg，单张最大 {maxTorrentImageUploadMb}MB。</small>
+          <label
+            className={`dropzone image-dropzone${
+              uploading || guestDisabled || imageUploadDisabled ? " is-disabled" : ""
+            }`}
+            htmlFor="images"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={onImageDrop}
+          >
+            <input
+              accept="image/jpeg,image/png,image/webp,image/svg+xml"
+              disabled={uploading || guestDisabled || imageUploadDisabled}
+              id="images"
+              multiple
+              name="images"
+              onChange={onImageInputChange}
+              ref={imageInputRef}
+              type="file"
+            />
+            <ImagePlus size={30} />
+            <p>
+              <strong>点击上传或拖拽图片至此</strong>
+            </p>
+            <small>支持 jpg/png/webp/svg</small>
+            <small>单张图片大小：{maxTorrentImageUploadMb}MB，最多 {MAX_IMAGE_COUNT} 张</small>
+            <small>{images.length > 0 ? `已选择 ${images.length} 张图片` : "未选择图片"}</small>
+            {imageLimitExceeded ? <small>已超过上限，请删除至 {MAX_IMAGE_COUNT} 张以内</small> : null}
+          </label>
 
           {images.length > 0 ? (
             <div className="image-preview-grid">
@@ -343,12 +380,7 @@ export function UploadForm({
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="image-empty-hint">
-              <ImagePlus size={16} />
-              <span>未选择图片</span>
-            </div>
-          )}
+          ) : null}
         </div>
 
         {isLoggedIn ? (
@@ -386,7 +418,7 @@ export function UploadForm({
         >
           取消
         </button>
-        <button className="primary-btn" disabled={uploading || guestDisabled} type="submit">
+        <button className="primary-btn" disabled={uploading || guestDisabled || imageLimitExceeded} type="submit">
           {uploading ? "上传中..." : "提交种子"}
         </button>
       </div>

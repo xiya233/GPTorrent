@@ -64,19 +64,6 @@ export function SiteForm({
         </span>
       </label>
 
-      <label className="checkbox-row" htmlFor="allowUserDeleteTorrent">
-        <input
-          defaultChecked={allowUserDeleteTorrent}
-          id="allowUserDeleteTorrent"
-          name="allowUserDeleteTorrent"
-          type="checkbox"
-        />
-        <span>
-          <strong>允许用户删除自己的种子</strong>
-          <small>关闭后，仅管理员可删除种子。</small>
-        </span>
-      </label>
-
       <label className="checkbox-row" htmlFor="allowGuestTorrentImageUpload">
         <input
           defaultChecked={allowGuestTorrentImageUpload}
@@ -85,8 +72,21 @@ export function SiteForm({
           type="checkbox"
         />
         <span>
-          <strong>允许游客上传种子图片</strong>
-          <small>关闭后，游客可上传种子但不能附带图片。</small>
+          <strong>允许访客上传种子图片</strong>
+          <small>关闭后，访客可上传种子但不能附带图片。</small>
+        </span>
+      </label>
+
+      <label className="checkbox-row" htmlFor="allowUserDeleteTorrent">
+        <input
+          defaultChecked={allowUserDeleteTorrent}
+          id="allowUserDeleteTorrent"
+          name="allowUserDeleteTorrent"
+          type="checkbox"
+        />
+        <span>
+          <strong>允许已注册用户删除自己的种子</strong>
+          <small>关闭后，仅管理员可删除种子。</small>
         </span>
       </label>
 

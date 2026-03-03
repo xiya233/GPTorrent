@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { logoutAction } from "@/app/auth/actions";
+import { HeaderUserMenu } from "@/components/header-user-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { getCurrentUser } from "@/lib/auth";
 import { TORRENT_CATEGORIES } from "@/lib/categories";
@@ -17,7 +18,7 @@ export async function SiteHeader() {
 
   return (
     <header className="site-header">
-      <div className="container header-inner">
+      <div className={`container header-inner${!user ? " header-inner-guest" : ""}`}>
         <div className="brand-wrap">
           {logoUrl ? (
             <Image alt="site logo" className="header-logo" height={24} src={logoUrl} unoptimized width={24} />
@@ -36,21 +37,6 @@ export async function SiteHeader() {
           <Link className="nav-link" href="/upload">
             上传
           </Link>
-          {user ? (
-            <Link className="nav-link" href="/settings/profile">
-              账号设置
-            </Link>
-          ) : null}
-          {user ? (
-            <Link className="nav-link" href="/my/torrents">
-              我的种子
-            </Link>
-          ) : null}
-          {user?.role === "admin" ? (
-            <Link className="nav-link" href="/admin">
-              管理后台
-            </Link>
-          ) : null}
         </nav>
 
         <form action="/" className="search-bar" method="GET">
@@ -70,29 +56,18 @@ export async function SiteHeader() {
           <ThemeToggle />
 
           {user ? (
-            <>
-              <div className="mini-user">
-                <div className="mini-avatar">
-                  {avatarUrl ? (
-                    <Image alt={`${user.username} avatar`} fill sizes="32px" src={avatarUrl} unoptimized />
-                  ) : (
-                    <span>{user.username.slice(0, 1).toUpperCase()}</span>
-                  )}
-                </div>
-                <span>{user.username}</span>
-              </div>
-              <form action={logoutAction}>
-                <button className="secondary-btn tiny-btn" type="submit">
-                  登出
-                </button>
-              </form>
-            </>
+            <HeaderUserMenu
+              avatarUrl={avatarUrl}
+              isAdmin={user.role === "admin"}
+              logoutAction={logoutAction}
+              username={user.username}
+            />
           ) : (
             <div className="auth-links">
-              <Link className="secondary-btn tiny-btn" href="/auth/login">
+              <Link className="secondary-btn header-auth-btn" href="/auth/login">
                 登录
               </Link>
-              <Link className="primary-btn tiny-btn" href="/auth/register">
+              <Link className="primary-btn header-auth-btn" href="/auth/register">
                 注册
               </Link>
             </div>
