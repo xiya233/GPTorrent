@@ -46,7 +46,7 @@ export default async function AdminTorrentsPage({ searchParams }: AdminTorrentsP
         </form>
 
         <div className="table-wrap">
-          <table>
+          <table className="admin-torrents-table">
             <thead>
               <tr>
                 <th>ID</th>
@@ -68,8 +68,10 @@ export default async function AdminTorrentsPage({ searchParams }: AdminTorrentsP
                 torrents.map((torrent) => (
                   <tr key={torrent.id}>
                     <td>{torrent.id}</td>
-                    <td>
-                      <Link href={`/torrent/${torrent.id}`}>{torrent.name}</Link>
+                    <td className="torrent-title-cell">
+                      <Link className="torrent-title-link" href={`/torrent/${torrent.id}`} title={torrent.name}>
+                        {torrent.name}
+                      </Link>
                     </td>
                     <td>{torrent.uploader_display || "访客"}</td>
                     <td>{torrent.status}</td>

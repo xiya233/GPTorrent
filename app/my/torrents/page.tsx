@@ -15,7 +15,7 @@ export default async function MyTorrentsPage() {
 
       <section className="card">
         <div className="table-wrap">
-          <table>
+          <table className="my-torrents-table">
             <thead>
               <tr>
                 <th>ID</th>
@@ -36,8 +36,10 @@ export default async function MyTorrentsPage() {
                 torrents.map((torrent) => (
                   <tr key={torrent.id}>
                     <td>{torrent.id}</td>
-                    <td>
-                      <Link href={`/torrent/${torrent.id}`}>{torrent.name}</Link>
+                    <td className="torrent-title-cell">
+                      <Link className="torrent-title-link" href={`/torrent/${torrent.id}`} title={torrent.name}>
+                        {torrent.name}
+                      </Link>
                     </td>
                     <td>{torrent.status}</td>
                     <td>{torrent.category}</td>

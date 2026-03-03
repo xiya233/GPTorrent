@@ -244,6 +244,27 @@ table {
   min-width: 860px;
 }
 
+.torrent-list-table,
+.my-torrents-table,
+.admin-torrents-table {
+  table-layout: fixed;
+}
+
+.torrent-list-table th:nth-child(2),
+.torrent-list-table td:nth-child(2) {
+  width: 42%;
+}
+
+.my-torrents-table th:nth-child(2),
+.my-torrents-table td:nth-child(2) {
+  width: 48%;
+}
+
+.admin-torrents-table th:nth-child(2),
+.admin-torrents-table td:nth-child(2) {
+  width: 40%;
+}
+
 th,
 td {
   padding: 14px 16px;
@@ -339,8 +360,23 @@ tbody tr:last-child td {
 }
 
 .torrent-name-wrap strong {
+  display: block;
+  min-width: 0;
   font-size: 0.92rem;
   font-weight: 600;
+}
+
+.torrent-title-cell {
+  min-width: 0;
+}
+
+.torrent-title-link {
+  display: block;
+  width: 100%;
+  max-width: 72ch;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tag-list {

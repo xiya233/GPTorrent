@@ -80,7 +80,7 @@ export function TorrentTable({ torrents, emptyText = "没有匹配的种子" }: 
   return (
     <section className="card table-card">
       <div className="table-wrap">
-        <table>
+        <table className="torrent-list-table">
           <thead>
             <tr>
               <th>类型</th>
@@ -109,10 +109,12 @@ export function TorrentTable({ torrents, emptyText = "没有匹配的种子" }: 
                       <span className={`type-badge ${badgeClass[row.category] ?? "badge-gray"}`}>{row.category}</span>
                     </Link>
                   </td>
-                  <td>
+                  <td className="torrent-title-cell">
                     <div className="torrent-name-wrap">
                       <strong>
-                        <Link href={`/torrent/${row.id}`}>{row.name}</Link>
+                        <Link className="torrent-title-link" href={`/torrent/${row.id}`} title={row.name}>
+                          {row.name}
+                        </Link>
                       </strong>
                       {renderTags(row)}
                     </div>
