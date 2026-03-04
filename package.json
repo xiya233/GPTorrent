@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "bunx --bun next dev",
-    "build": "bunx --bun next build",
+    "build": "BTSHARE_BUILD_MODE=1 bunx --bun next build",
     "start": "bunx --bun next start",
     "lint": "bunx --bun next lint",
     "db:init": "bun run scripts/init-db.ts",

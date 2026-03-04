@@ -7,6 +7,10 @@ function playlistUrl(fileId: number) {
   return `/offline/files/${fileId}/hls/index.m3u8`;
 }
 
+function posterUrl(fileId: number) {
+  return `/offline/files/${fileId}/poster`;
+}
+
 export async function GET(_request: Request, { params }: { params: Promise<{ fileId: string }> }) {
   const { fileId } = await params;
   const idNum = Number(fileId);
@@ -37,6 +41,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ fil
     canPlay: file.is_video === 1 && file.hls_status === "ready",
     canDownload: file.job_status === "completed",
     hlsProgress: Math.max(0, Math.min(1, Number(file.hls_progress || 0))),
+    hlsVariantCount: Math.max(1, Math.floor(Number(file.hls_variant_count || 1))),
+    hlsUpgradeState: file.hls_upgrade_state,
+    hlsUpgradeError: file.hls_upgrade_error || "",
+    posterUrl: file.poster_status === "ready" && file.poster_path ? posterUrl(file.id) : "",
+    posterStatus: file.poster_status || "none",
+    posterError: file.poster_error || "",
+    posterScore: Math.max(0, Number(file.poster_score || 0)),
+    posterPickTime: Math.max(0, Number(file.poster_pick_time || 0)),
+    posterGeneratedAt: file.poster_generated_at || "",
     lastUpdatedAt: file.updated_at,
   } satisfies OfflinePlayStatusResponse);
 }

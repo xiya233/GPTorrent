@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { OfflinePlayStatusResponse, OfflinePlayerState } from "@/lib/offline/player";
+import type { OfflinePlayStatusResponse, OfflinePlayerState, OfflinePosterState } from "@/lib/offline/player";
 
 type ArtOfflinePlayerProps = {
   fileId: number;
@@ -18,6 +18,15 @@ type PreparePlayResponse = {
   error: string;
   playlistUrl: string;
   hlsProgress?: number;
+  hlsVariantCount?: number;
+  hlsUpgradeState?: "none" | "queued" | "running" | "failed";
+  hlsUpgradeError?: string;
+  posterUrl?: string;
+  posterStatus?: OfflinePosterState;
+  posterError?: string;
+  posterScore?: number;
+  posterPickTime?: number;
+  posterGeneratedAt?: string;
 };
 
 const QUALITY_SETTING_NAME = "hls-quality-switch";
@@ -31,7 +40,10 @@ function isSafariBrowser() {
   if (typeof navigator === "undefined") {
     return false;
   }
-  return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  const ua = navigator.userAgent;
+  const hasSafari = /Safari/i.test(ua);
+  const excluded = /Chrome|Chromium|CriOS|Edg|OPR|Firefox|FxiOS|Android/i.test(ua);
+  return hasSafari && !excluded;
 }
 
 function formatPercent(progress: number) {
@@ -120,6 +132,14 @@ export function ArtOfflinePlayer({
   const [fileName, setFileName] = useState(initialFileName);
   const [downloadUrl, setDownloadUrl] = useState(initialDownloadUrl);
   const [lastUpdatedAt, setLastUpdatedAt] = useState("");
+  const [hlsVariantCount, setHlsVariantCount] = useState(1);
+  const [hlsUpgradeState, setHlsUpgradeState] = useState<"none" | "queued" | "running" | "failed">("none");
+  const [hlsUpgradeError, setHlsUpgradeError] = useState("");
+  const [posterUrl, setPosterUrl] = useState("");
+  const [posterStatus, setPosterStatus] = useState<OfflinePosterState>("none");
+  const [posterError, setPosterError] = useState("");
+  const [posterScore, setPosterScore] = useState(0);
+  const [posterPickTime, setPosterPickTime] = useState(0);
 
   const artContainerRef = useRef<HTMLDivElement | null>(null);
   const artRef = useRef<any>(null);
@@ -149,6 +169,14 @@ export function ArtOfflinePlayer({
     setFileName(data.fileName || initialFileName);
     setDownloadUrl(data.downloadUrl || initialDownloadUrl);
     setLastUpdatedAt(data.lastUpdatedAt || "");
+    setHlsVariantCount(Math.max(1, Math.floor(Number(data.hlsVariantCount || 1))));
+    setHlsUpgradeState(data.hlsUpgradeState || "none");
+    setHlsUpgradeError(data.hlsUpgradeError || "");
+    setPosterUrl(data.posterUrl || "");
+    setPosterStatus(data.posterStatus || "none");
+    setPosterError(data.posterError || "");
+    setPosterScore(Math.max(0, Number(data.posterScore || 0)));
+    setPosterPickTime(Math.max(0, Number(data.posterPickTime || 0)));
     return data;
   }
 
@@ -170,9 +198,44 @@ export function ArtOfflinePlayer({
       if (typeof data.hlsProgress === "number") {
         setHlsProgress(Math.max(0, Math.min(1, data.hlsProgress)));
       }
+      if (typeof data.hlsVariantCount === "number") {
+        setHlsVariantCount(Math.max(1, Math.floor(data.hlsVariantCount)));
+      }
+      if (data.hlsUpgradeState) {
+        setHlsUpgradeState(data.hlsUpgradeState);
+      }
+      setHlsUpgradeError(data.hlsUpgradeError || "");
+      setPosterUrl(data.posterUrl || "");
+      setPosterStatus(data.posterStatus || "none");
+      setPosterError(data.posterError || "");
+      if (typeof data.posterScore === "number") {
+        setPosterScore(Math.max(0, Number(data.posterScore)));
+      }
+      if (typeof data.posterPickTime === "number") {
+        setPosterPickTime(Math.max(0, Number(data.posterPickTime)));
+      }
       retrySeedRef.current += 1;
     } catch (err) {
       setError(err instanceof Error ? err.message : "准备播放失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function regeneratePoster() {
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/offline/files/${fileId}/poster/regenerate`, {
+        method: "POST",
+      });
+      const payload = (await response.json()) as { error?: string; posterStatus?: OfflinePosterState };
+      if (!response.ok) {
+        throw new Error(payload.error || "重选封面失败");
+      }
+      setPosterStatus(payload.posterStatus || "queued");
+      await fetchStatus();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "重选封面失败");
     } finally {
       setBusy(false);
     }
@@ -192,7 +255,8 @@ export function ArtOfflinePlayer({
   }, [fileId]);
 
   useEffect(() => {
-    if (!pending && status !== "none") {
+    const shouldPollPoster = status === "ready" && (posterStatus === "queued" || posterStatus === "running");
+    if (!pending && status !== "none" && !shouldPollPoster) {
       return;
     }
 
@@ -204,7 +268,7 @@ export function ArtOfflinePlayer({
 
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pending, status, fileId]);
+  }, [pending, status, fileId, posterStatus]);
 
   useEffect(() => {
     if (!canRenderPlayer || !artContainerRef.current) {
@@ -246,6 +310,7 @@ export function ArtOfflinePlayer({
           container: artContainerRef.current,
           url: playlistUrl,
           type: "m3u8",
+          poster: posterUrl || "",
           autoplay: false,
           autoSize: false,
           pip: true,
@@ -263,7 +328,10 @@ export function ArtOfflinePlayer({
           customType: {
             m3u8: function (video: HTMLVideoElement, url: string) {
               const player = this as any;
-              if (video.canPlayType("application/vnd.apple.mpegurl") || isSafariBrowser()) {
+              const canNative = Boolean(video.canPlayType("application/vnd.apple.mpegurl"));
+              const preferNative = isSafariBrowser() && canNative;
+
+              if (preferNative) {
                 try {
                   player.setting.remove(QUALITY_SETTING_NAME);
                 } catch {
@@ -273,7 +341,33 @@ export function ArtOfflinePlayer({
                 return;
               }
 
-              if (!Hls.isSupported()) {
+              if (Hls.isSupported()) {
+                const hls = new Hls({
+                  enableWorker: true,
+                  lowLatencyMode: false,
+                });
+                hlsRef.current = hls;
+
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                  syncQualitySetting(player, hls);
+                });
+
+                hls.on(Hls.Events.LEVEL_SWITCHED, () => {
+                  syncQualitySetting(player, hls);
+                });
+
+                hls.on(Hls.Events.ERROR, (_evt: unknown, data: { fatal?: boolean; details?: string }) => {
+                  if (data?.fatal) {
+                    setError(`播放器错误：${data.details || "HLS_FATAL"}`);
+                  }
+                });
+
+                hls.loadSource(url);
+                hls.attachMedia(video);
+                return;
+              }
+
+              if (canNative) {
                 try {
                   player.setting.remove(QUALITY_SETTING_NAME);
                 } catch {
@@ -283,28 +377,7 @@ export function ArtOfflinePlayer({
                 return;
               }
 
-              const hls = new Hls({
-                enableWorker: true,
-                lowLatencyMode: false,
-              });
-              hlsRef.current = hls;
-
-              hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                syncQualitySetting(player, hls);
-              });
-
-              hls.on(Hls.Events.LEVEL_SWITCHED, () => {
-                syncQualitySetting(player, hls);
-              });
-
-              hls.on(Hls.Events.ERROR, (_evt: unknown, data: { fatal?: boolean; details?: string }) => {
-                if (data?.fatal) {
-                  setError(`播放器错误：${data.details || "HLS_FATAL"}`);
-                }
-              });
-
-              hls.loadSource(url);
-              hls.attachMedia(video);
+              setError("当前浏览器不支持 HLS 播放");
             },
           },
         });
@@ -366,6 +439,17 @@ export function ArtOfflinePlayer({
     };
   }, [canRenderPlayer, fileId, playlistUrl, retrySeed]);
 
+  useEffect(() => {
+    if (!canRenderPlayer || !posterUrl || !artRef.current) {
+      return;
+    }
+    try {
+      artRef.current.poster = posterUrl;
+    } catch {
+      // ignore setter failures
+    }
+  }, [canRenderPlayer, posterUrl]);
+
   return (
     <div className="art-player-shell">
       <div className="art-player-toolbar">
@@ -400,11 +484,29 @@ export function ArtOfflinePlayer({
         <button className="secondary-btn" disabled={busy} onClick={() => fetchStatus().catch(() => {})} type="button">
           刷新状态
         </button>
+        <button className="secondary-btn" disabled={busy || status !== "ready"} onClick={regeneratePoster} type="button">
+          重选封面
+        </button>
         <button className="primary-btn" disabled={busy} onClick={preparePlay} type="button">
           重试播放
         </button>
       </div>
 
+      {status === "ready" && hlsVariantCount <= 1 && (hlsUpgradeState === "queued" || hlsUpgradeState === "running") ? (
+        <p className="muted">后台升级多码率中，稍后可切换清晰度。</p>
+      ) : null}
+      {status === "ready" && hlsVariantCount <= 1 && hlsUpgradeState === "failed" && hlsUpgradeError ? (
+        <p className="form-error">多码率升级失败：{hlsUpgradeError}</p>
+      ) : null}
+      {status === "ready" && (posterStatus === "queued" || posterStatus === "running") ? (
+        <p className="muted">正在生成视频封面...</p>
+      ) : null}
+      {status === "ready" && posterStatus === "failed" && posterError ? (
+        <p className="form-error">封面生成失败：{posterError}</p>
+      ) : null}
+      {status === "ready" && posterStatus === "ready" ? (
+        <p className="muted">封面评分：{posterScore.toFixed(3)}，采样时间：{posterPickTime.toFixed(2)}s</p>
+      ) : null}
       {error && status !== "failed" ? <p className="form-error">{error}</p> : null}
     </div>
   );

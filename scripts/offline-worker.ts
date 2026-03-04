@@ -1,17 +1,24 @@
 import path from "node:path";
 import {
+  claimQueuedOfflineFilePoster,
+  claimQueuedOfflineFileUpgrade,
   countOfflineDownloadingJobs,
   expireOfflineJobsByNow,
   getTorrentDetailById,
   listDownloadingOfflineJobs,
   listPendingHlsOfflineFiles,
+  listQueuedOfflineFilePosters,
+  listQueuedOfflineFileUpgrades,
   listQueuedOfflineJobs,
   markOfflineFileHlsStatus,
   markOfflineJobCompleted,
   markOfflineJobDownloading,
   markOfflineJobFailed,
   replaceOfflineFiles,
+  setOfflineFilePosterState,
+  setOfflineFileUpgradeState,
   updateOfflineFileHlsProgress,
+  updateOfflineFileVariantCount,
   updateOfflineJobProgress,
 } from "../lib/db";
 import {
@@ -23,7 +30,7 @@ import {
 } from "../lib/offline/config";
 import { ensureDir, normalizeRelativePath, relativeToData, resolveDataRelativePath } from "../lib/offline/path";
 import { getQbClient } from "../lib/offline/qb";
-import { transcodeToHls } from "../lib/offline/transcode";
+import { generatePosterFromVideo, transcodeToHls } from "../lib/offline/transcode";
 import { guessMimeType, isVideoPath } from "../lib/offline/video";
 
 const DEFAULT_SLEEP_MS = 20_000;
@@ -282,6 +289,7 @@ async function processPendingTranscode(verbose: boolean) {
       ffprobeBin: getFfprobeBin(),
       sourceAbs,
       outDirAbs,
+      mode: "fresh",
       onProgress: (progress) => {
         updateOfflineFileHlsProgress(file.id, progress);
       },
@@ -297,6 +305,30 @@ async function processPendingTranscode(verbose: boolean) {
       playlistPath,
       error: "",
     });
+    if (result.posterAbs) {
+      const posterPath = relativeToData(result.posterAbs);
+      if (posterPath) {
+        setOfflineFilePosterState(file.id, {
+          status: "ready",
+          posterPath,
+          error: "",
+          score: result.posterScore,
+          pickTime: result.posterPickTime,
+        });
+      } else {
+        setOfflineFilePosterState(file.id, {
+          status: "failed",
+          error: "封面路径非法",
+        });
+      }
+    } else if (result.posterError) {
+      setOfflineFilePosterState(file.id, {
+        status: "failed",
+        error: result.posterError,
+      });
+    }
+    updateOfflineFileVariantCount(file.id, result.variantCount);
+    setOfflineFileUpgradeState(file.id, "none", "");
     updateOfflineFileHlsProgress(file.id, 1);
 
     if (verbose) {
@@ -326,6 +358,139 @@ async function processPendingTranscode(verbose: boolean) {
   }
 }
 
+async function processQueuedPoster(verbose: boolean) {
+  const queue = listQueuedOfflineFilePosters(1);
+  if (queue.length === 0) {
+    return { posterPicked: 0, posterReady: 0, posterFailed: 0 };
+  }
+
+  const file = queue[0];
+  if (!claimQueuedOfflineFilePoster(file.id)) {
+    return { posterPicked: 1, posterReady: 0, posterFailed: 0 };
+  }
+
+  try {
+    const sourceAbs = resolveDataRelativePath(file.relative_path);
+    if (!sourceAbs) {
+      throw new Error("源文件路径非法");
+    }
+
+    const existingPlaylistAbs = file.hls_playlist_path ? resolveDataRelativePath(file.hls_playlist_path) : null;
+    const outDirAbs = existingPlaylistAbs ? path.dirname(existingPlaylistAbs) : path.join(getOfflineHlsRoot(), `file-${file.id}`);
+    const poster = await generatePosterFromVideo({
+      ffmpegBin: getFfmpegBin(),
+      ffprobeBin: getFfprobeBin(),
+      sourceAbs,
+      outDirAbs,
+    });
+    const posterPath = relativeToData(poster.posterAbs);
+    if (!posterPath) {
+      throw new Error("封面输出路径非法");
+    }
+
+    setOfflineFilePosterState(file.id, {
+      status: "ready",
+      posterPath,
+      error: "",
+      score: poster.score,
+      pickTime: poster.pickTime,
+    });
+
+    if (verbose) {
+      console.log(
+        `[offline-worker][verbose] poster-ready file=${file.id} poster=${posterPath} score=${poster.score.toFixed(4)} pick=${poster.pickTime.toFixed(3)}s`,
+      );
+    }
+
+    return {
+      posterPicked: 1,
+      posterReady: 1,
+      posterFailed: 0,
+    };
+  } catch (error) {
+    setOfflineFilePosterState(file.id, {
+      status: "failed",
+      error: formatError(error),
+    });
+    if (verbose) {
+      console.log(`[offline-worker][verbose] poster-failed file=${file.id} reason=${formatError(error)}`);
+    }
+    return {
+      posterPicked: 1,
+      posterReady: 0,
+      posterFailed: 1,
+    };
+  }
+}
+
+async function processQueuedUpgradeTranscode(verbose: boolean) {
+  const queue = listQueuedOfflineFileUpgrades(1);
+  if (queue.length === 0) {
+    return { upgradePicked: 0, upgradeReady: 0, upgradeFailed: 0 };
+  }
+
+  const file = queue[0];
+  if (!claimQueuedOfflineFileUpgrade(file.id)) {
+    return { upgradePicked: 1, upgradeReady: 0, upgradeFailed: 0 };
+  }
+
+  try {
+    const sourceAbs = resolveDataRelativePath(file.relative_path);
+    if (!sourceAbs) {
+      throw new Error("源文件路径非法");
+    }
+
+    const existingPlaylistAbs = file.hls_playlist_path ? resolveDataRelativePath(file.hls_playlist_path) : null;
+    const outDirAbs = existingPlaylistAbs ? path.dirname(existingPlaylistAbs) : path.join(getOfflineHlsRoot(), `file-${file.id}`);
+    updateOfflineFileHlsProgress(file.id, 0);
+
+    const result = await transcodeToHls({
+      ffmpegBin: getFfmpegBin(),
+      ffprobeBin: getFfprobeBin(),
+      sourceAbs,
+      outDirAbs,
+      mode: "upgrade_in_place",
+      onProgress: (progress) => {
+        updateOfflineFileHlsProgress(file.id, progress);
+      },
+    });
+
+    const playlistPath = relativeToData(result.playlistAbs);
+    if (!playlistPath) {
+      throw new Error("升级后 HLS 输出路径非法");
+    }
+
+    markOfflineFileHlsStatus(file.id, {
+      status: "ready",
+      playlistPath,
+      error: "",
+    });
+    updateOfflineFileVariantCount(file.id, result.variantCount);
+    setOfflineFileUpgradeState(file.id, "none", "");
+    updateOfflineFileHlsProgress(file.id, 1);
+
+    if (verbose) {
+      console.log(`[offline-worker][verbose] hls-upgrade-ready file=${file.id} variants=${result.variantCount}`);
+    }
+
+    return {
+      upgradePicked: 1,
+      upgradeReady: 1,
+      upgradeFailed: 0,
+    };
+  } catch (error) {
+    setOfflineFileUpgradeState(file.id, "failed", formatError(error));
+    if (verbose) {
+      console.log(`[offline-worker][verbose] hls-upgrade-failed file=${file.id} reason=${formatError(error)}`);
+    }
+    return {
+      upgradePicked: 1,
+      upgradeReady: 0,
+      upgradeFailed: 1,
+    };
+  }
+}
+
 async function run() {
   const argSet = new Set(process.argv.slice(2));
   const once = argSet.has("--once");
@@ -343,9 +508,11 @@ async function run() {
     const queuedStat = await processQueuedJobs(verbose);
     const downloadingStat = await processDownloadingJobs(verbose);
     const transcodeStat = await processPendingTranscode(verbose);
+    const upgradeStat = await processQueuedUpgradeTranscode(verbose);
+    const posterStat = await processQueuedPoster(verbose);
 
     console.log(
-      `[offline-worker] queued=${queuedStat.queuedPicked}/${queuedStat.queuedStarted}/${queuedStat.queuedFailed} downloading=${downloadingStat.downloading} completed=${downloadingStat.completed} failed=${downloadingStat.failed} transcode=${transcodeStat.transcodePicked}/${transcodeStat.transcodeReady}/${transcodeStat.transcodeFailed}`,
+      `[offline-worker] queued=${queuedStat.queuedPicked}/${queuedStat.queuedStarted}/${queuedStat.queuedFailed} downloading=${downloadingStat.downloading} completed=${downloadingStat.completed} failed=${downloadingStat.failed} transcode=${transcodeStat.transcodePicked}/${transcodeStat.transcodeReady}/${transcodeStat.transcodeFailed} upgrade=${upgradeStat.upgradePicked}/${upgradeStat.upgradeReady}/${upgradeStat.upgradeFailed} poster=${posterStat.posterPicked}/${posterStat.posterReady}/${posterStat.posterFailed}`,
     );
 
     if (once) {

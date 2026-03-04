@@ -5,15 +5,23 @@ import { TORRENT_CATEGORIES } from "@/lib/categories";
 import { hashPassword, validatePasswordStrength } from "@/lib/password";
 
 const dataDir = path.join(process.cwd(), "data");
-const dbPath = path.join(dataDir, "btshare.sqlite");
+const isBuildMode =
+  process.env.BTSHARE_BUILD_MODE === "1" ||
+  process.env.NEXT_PHASE === "phase-production-build" ||
+  process.argv.join(" ").includes("next build");
+const dbPath = isBuildMode ? ":memory:" : path.join(dataDir, "btshare.sqlite");
 
-fs.mkdirSync(dataDir, { recursive: true });
+if (!isBuildMode) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
 
 export type UserRole = "user" | "admin";
 export type UserStatus = "active" | "banned" | "deleted";
 export type TorrentStatus = "active" | "deleted_user" | "deleted_admin";
 export type OfflineJobStatus = "queued" | "downloading" | "completed" | "failed" | "expired";
 export type HlsStatus = "none" | "pending" | "running" | "ready" | "failed";
+export type HlsUpgradeState = "none" | "queued" | "running" | "failed";
+export type PosterStatus = "none" | "queued" | "running" | "ready" | "failed";
 
 export type TorrentRow = {
   id: number;
@@ -109,6 +117,15 @@ export type OfflineFileRow = {
   is_video: number;
   hls_status: HlsStatus;
   hls_progress: number;
+  hls_variant_count: number;
+  hls_upgrade_state: HlsUpgradeState;
+  hls_upgrade_error: string;
+  poster_path: string;
+  poster_status: PosterStatus;
+  poster_error: string;
+  poster_score: number;
+  poster_pick_time: number;
+  poster_generated_at: string;
   hls_playlist_path: string;
   hls_error: string;
   created_at: string;
@@ -346,6 +363,15 @@ CREATE TABLE IF NOT EXISTS offline_files (
   is_video INTEGER NOT NULL DEFAULT 0,
   hls_status TEXT NOT NULL DEFAULT 'none' CHECK(hls_status IN ('none', 'pending', 'running', 'ready', 'failed')),
   hls_progress REAL NOT NULL DEFAULT 0,
+  hls_variant_count INTEGER NOT NULL DEFAULT 1,
+  hls_upgrade_state TEXT NOT NULL DEFAULT 'none' CHECK(hls_upgrade_state IN ('none', 'queued', 'running', 'failed')),
+  hls_upgrade_error TEXT NOT NULL DEFAULT '',
+  poster_path TEXT NOT NULL DEFAULT '',
+  poster_status TEXT NOT NULL DEFAULT 'none' CHECK(poster_status IN ('none', 'queued', 'running', 'ready', 'failed')),
+  poster_error TEXT NOT NULL DEFAULT '',
+  poster_score REAL NOT NULL DEFAULT 0,
+  poster_pick_time REAL NOT NULL DEFAULT 0,
+  poster_generated_at TEXT NOT NULL DEFAULT '',
   hls_playlist_path TEXT NOT NULL DEFAULT '',
   hls_error TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL,
@@ -451,10 +477,56 @@ ensureColumn(
   "hls_progress",
   "ALTER TABLE offline_files ADD COLUMN hls_progress REAL NOT NULL DEFAULT 0",
 );
+ensureColumn(
+  "offline_files",
+  "hls_variant_count",
+  "ALTER TABLE offline_files ADD COLUMN hls_variant_count INTEGER NOT NULL DEFAULT 1",
+);
+ensureColumn(
+  "offline_files",
+  "hls_upgrade_state",
+  "ALTER TABLE offline_files ADD COLUMN hls_upgrade_state TEXT NOT NULL DEFAULT 'none'",
+);
+ensureColumn(
+  "offline_files",
+  "hls_upgrade_error",
+  "ALTER TABLE offline_files ADD COLUMN hls_upgrade_error TEXT NOT NULL DEFAULT ''",
+);
+ensureColumn(
+  "offline_files",
+  "poster_path",
+  "ALTER TABLE offline_files ADD COLUMN poster_path TEXT NOT NULL DEFAULT ''",
+);
+ensureColumn(
+  "offline_files",
+  "poster_status",
+  "ALTER TABLE offline_files ADD COLUMN poster_status TEXT NOT NULL DEFAULT 'none'",
+);
+ensureColumn(
+  "offline_files",
+  "poster_error",
+  "ALTER TABLE offline_files ADD COLUMN poster_error TEXT NOT NULL DEFAULT ''",
+);
+ensureColumn(
+  "offline_files",
+  "poster_score",
+  "ALTER TABLE offline_files ADD COLUMN poster_score REAL NOT NULL DEFAULT 0",
+);
+ensureColumn(
+  "offline_files",
+  "poster_pick_time",
+  "ALTER TABLE offline_files ADD COLUMN poster_pick_time REAL NOT NULL DEFAULT 0",
+);
+ensureColumn(
+  "offline_files",
+  "poster_generated_at",
+  "ALTER TABLE offline_files ADD COLUMN poster_generated_at TEXT NOT NULL DEFAULT ''",
+);
 
 db.exec(
   "CREATE UNIQUE INDEX IF NOT EXISTS idx_torrents_info_hash_unique ON torrents(info_hash) WHERE status = 'active' AND info_hash IS NOT NULL AND info_hash != ''",
 );
+db.exec("CREATE INDEX IF NOT EXISTS idx_offline_files_poster_status ON offline_files(poster_status)");
 
 const settingsExists = db.query("SELECT id FROM site_settings WHERE id = 1").get() as { id: number } | null;
 if (!settingsExists) {
@@ -1005,7 +1077,7 @@ export function replaceOfflineFiles(
     db.query("DELETE FROM offline_files WHERE job_id = ?").run(jobId);
 
     const stmt = db.query(
-      "INSERT INTO offline_files (job_id, torrent_file_id, relative_path, size_bytes, mime_type, is_video, hls_status, hls_progress, hls_playlist_path, hls_error, created_at, updated_at, last_accessed_at) VALUES (?, ?, ?, ?, ?, ?, 'none', 0, '', '', ?, ?, ?)",
+      "INSERT INTO offline_files (job_id, torrent_file_id, relative_path, size_bytes, mime_type, is_video, hls_status, hls_progress, hls_variant_count, hls_upgrade_state, hls_upgrade_error, poster_path, poster_status, poster_error, poster_score, poster_pick_time, poster_generated_at, hls_playlist_path, hls_error, created_at, updated_at, last_accessed_at) VALUES (?, ?, ?, ?, ?, ?, 'none', 0, 1, 'none', '', '', 'none', '', 0, 0, '', '', '', ?, ?, ?)",
     );
 
     files.forEach((file) => {
@@ -1056,6 +1128,94 @@ export function updateOfflineFileHlsProgress(fileId: number, progress: number) {
   );
 }
 
+export function updateOfflineFileVariantCount(fileId: number, variantCount: number) {
+  const now = new Date().toISOString();
+  db.query("UPDATE offline_files SET hls_variant_count = ?, updated_at = ? WHERE id = ?").run(
+    Math.max(1, Math.floor(variantCount)),
+    now,
+    fileId,
+  );
+}
+
+export function setOfflineFileUpgradeState(fileId: number, state: HlsUpgradeState, error = "") {
+  const now = new Date().toISOString();
+  db.query("UPDATE offline_files SET hls_upgrade_state = ?, hls_upgrade_error = ?, updated_at = ? WHERE id = ?").run(
+    state,
+    error.slice(0, 300),
+    now,
+    fileId,
+  );
+}
+
+export function queueOfflineFileUpgrade(fileId: number) {
+  const now = new Date().toISOString();
+  const result = db.query(
+    "UPDATE offline_files SET hls_upgrade_state = 'queued', hls_upgrade_error = '', updated_at = ? WHERE id = ? AND is_video = 1 AND hls_status = 'ready' AND hls_variant_count <= 1 AND hls_upgrade_state IN ('none', 'failed')",
+  ).run(now, fileId);
+  return result.changes > 0;
+}
+
+export function queueOfflineFilePoster(fileId: number, options?: { force?: boolean }) {
+  const now = new Date().toISOString();
+  const force = options?.force === true;
+  const result = force
+    ? db
+        .query(
+          "UPDATE offline_files SET poster_status = 'queued', poster_error = '', poster_score = 0, poster_pick_time = 0, poster_generated_at = '', updated_at = ? WHERE id = ? AND is_video = 1 AND hls_status = 'ready'",
+        )
+        .run(now, fileId)
+    : db
+        .query(
+          "UPDATE offline_files SET poster_status = 'queued', poster_error = '', poster_score = 0, poster_pick_time = 0, poster_generated_at = '', updated_at = ? WHERE id = ? AND is_video = 1 AND hls_status = 'ready' AND (poster_path = '' OR poster_status IN ('none', 'failed'))",
+        )
+        .run(now, fileId);
+  return result.changes > 0;
+}
+
+export function claimQueuedOfflineFilePoster(fileId: number) {
+  const now = new Date().toISOString();
+  const result = db.query(
+    "UPDATE offline_files SET poster_status = 'running', poster_error = '', updated_at = ? WHERE id = ? AND poster_status = 'queued' AND hls_status = 'ready' AND is_video = 1",
+  ).run(now, fileId);
+  return result.changes > 0;
+}
+
+export function setOfflineFilePosterState(
+  fileId: number,
+  input: {
+    status: PosterStatus;
+    posterPath?: string;
+    error?: string;
+    score?: number;
+    pickTime?: number;
+  },
+) {
+  const now = new Date().toISOString();
+  const generatedAt = input.status === "ready" ? now : "";
+  const score = Number.isFinite(input.score) ? Math.max(0, Number(input.score)) : 0;
+  const pickTime = Number.isFinite(input.pickTime) ? Math.max(0, Number(input.pickTime)) : 0;
+  db.query(
+    "UPDATE offline_files SET poster_status = ?, poster_path = ?, poster_error = ?, poster_score = ?, poster_pick_time = ?, poster_generated_at = ?, updated_at = ? WHERE id = ?",
+  ).run(
+    input.status,
+    (input.posterPath ?? "").slice(0, 400),
+    (input.error ?? "").slice(0, 300),
+    score,
+    pickTime,
+    generatedAt,
+    now,
+    fileId,
+  );
+}
+
+export function claimQueuedOfflineFileUpgrade(fileId: number) {
+  const now = new Date().toISOString();
+  const result = db.query(
+    "UPDATE offline_files SET hls_upgrade_state = 'running', hls_upgrade_error = '', updated_at = ? WHERE id = ? AND hls_upgrade_state = 'queued' AND hls_status = 'ready'",
+  ).run(now, fileId);
+  return result.changes > 0;
+}
+
 export function listPendingHlsOfflineFiles(limit = 10) {
   const rows = db
     .query(
@@ -1068,6 +1228,63 @@ export function listPendingHlsOfflineFiles(limit = 10) {
       JOIN offline_jobs j ON j.id = f.job_id
       WHERE f.hls_status = 'pending'
         AND f.is_video = 1
+        AND j.status = 'completed'
+      ORDER BY datetime(f.updated_at) ASC, f.id ASC
+      LIMIT ?
+      `,
+    )
+    .all(limit);
+
+  return rows as Array<
+    OfflineFileRow & {
+      job_status: OfflineJobStatus;
+      job_expires_at: string | null;
+    }
+  >;
+}
+
+export function listQueuedOfflineFileUpgrades(limit = 10) {
+  const rows = db
+    .query(
+      `
+      SELECT
+        f.*,
+        j.status AS job_status,
+        j.expires_at AS job_expires_at
+      FROM offline_files f
+      JOIN offline_jobs j ON j.id = f.job_id
+      WHERE f.is_video = 1
+        AND f.hls_status = 'ready'
+        AND f.hls_variant_count <= 1
+        AND f.hls_upgrade_state = 'queued'
+        AND j.status = 'completed'
+      ORDER BY datetime(f.updated_at) ASC, f.id ASC
+      LIMIT ?
+      `,
+    )
+    .all(limit);
+
+  return rows as Array<
+    OfflineFileRow & {
+      job_status: OfflineJobStatus;
+      job_expires_at: string | null;
+    }
+  >;
+}
+
+export function listQueuedOfflineFilePosters(limit = 10) {
+  const rows = db
+    .query(
+      `
+      SELECT
+        f.*,
+        j.status AS job_status,
+        j.expires_at AS job_expires_at
+      FROM offline_files f
+      JOIN offline_jobs j ON j.id = f.job_id
+      WHERE f.is_video = 1
+        AND f.hls_status = 'ready'
+        AND f.poster_status = 'queued'
         AND j.status = 'completed'
       ORDER BY datetime(f.updated_at) ASC, f.id ASC
       LIMIT ?

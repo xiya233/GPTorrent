@@ -21,6 +21,9 @@ export async function GET(
   if (!SAFE_SEGMENT.test(segment)) {
     return new Response("Not Found", { status: 404 });
   }
+  if (!segment.endsWith(".m3u8") && !segment.endsWith(".ts")) {
+    return new Response("Not Found", { status: 404 });
+  }
 
   const file = getOfflineFileWithJob(idNum);
   if (!file || file.job_status !== "completed" || file.hls_status !== "ready" || !file.hls_playlist_path) {
@@ -45,7 +48,7 @@ export async function GET(
     touchOfflineJobAccess(file.job_id, getOfflineRetentionDays());
     touchOfflineFileAccess(file.id);
 
-    const contentType = segment === "index.m3u8" ? "application/vnd.apple.mpegurl" : "video/mp2t";
+    const contentType = segment.endsWith(".m3u8") ? "application/vnd.apple.mpegurl" : "video/mp2t";
 
     return new Response(raw, {
       headers: {
