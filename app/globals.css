@@ -252,7 +252,7 @@ table {
 }
 
 .torrent-list-table {
-  min-width: 1040px;
+  min-width: 1140px;
 }
 
 .torrent-list-table th:nth-child(2),
@@ -454,12 +454,16 @@ tbody tr:last-child td {
 }
 
 .torrent-list-table .torrent-col-stats {
-  width: 56px;
+  width: 88px;
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow: visible;
+  text-overflow: clip;
+  font-variant-numeric: tabular-nums;
 }
 
 .torrent-list-table .torrent-col-size,
-.torrent-list-table .torrent-col-date,
-.torrent-list-table .torrent-col-stats {
+.torrent-list-table .torrent-col-date {
   white-space: nowrap;
   word-break: keep-all;
   overflow: hidden;
