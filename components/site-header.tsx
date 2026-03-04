@@ -60,6 +60,11 @@ export async function SiteHeader() {
               </option>
             ))}
           </select>
+          <div className="search-divider" />
+          <select aria-label="信任筛选" name="trusted">
+            <option value="">全部种子</option>
+            <option value="1">仅信任</option>
+          </select>
         </form>
 
         <div className="header-actions">

@@ -844,10 +844,11 @@ export function expireOfflineJobsByNow(nowIso = new Date().toISOString()) {
   ).run(nowIso, nowIso);
 }
 
-export function listTorrents(params: { q?: string; category?: string; limit?: number } = {}) {
+export function listTorrents(params: { q?: string; category?: string; limit?: number; trustedOnly?: boolean } = {}) {
   const q = params.q?.trim() ?? "";
   const category = params.category?.trim() ?? "";
   const limit = Math.min(Math.max(params.limit ?? 100, 1), 300);
+  const trustedOnly = params.trustedOnly === true;
 
   const rows = db
     .query(`
@@ -856,10 +857,11 @@ export function listTorrents(params: { q?: string; category?: string; limit?: nu
       WHERE status = 'active'
         AND ($q = '' OR name LIKE '%' || $q || '%' OR tags LIKE '%' || $q || '%')
         AND ($category = '' OR category = $category)
+        AND ($trustedOnly = 0 OR is_trusted = 1)
       ORDER BY datetime(created_at) DESC, id DESC
       LIMIT $limit
     `)
-    .all({ $q: q, $category: category, $limit: limit });
+    .all({ $q: q, $category: category, $trustedOnly: trustedOnly ? 1 : 0, $limit: limit });
 
   return rows as TorrentRow[];
 }
@@ -984,6 +986,14 @@ export function listAdminTorrents(params: { q?: string; uploader?: string; statu
 export function getTorrentById(id: number) {
   const row = db.query("SELECT * FROM torrents WHERE id = ? LIMIT 1").get(id);
   return (row as TorrentRow | null) ?? null;
+}
+
+export function setTorrentTrusted(torrentId: number, trusted: boolean) {
+  const result = db
+    .query("UPDATE torrents SET is_trusted = ?, updated_at = ? WHERE id = ? AND status = 'active'")
+    .run(trusted ? 1 : 0, new Date().toISOString(), torrentId);
+
+  return result.changes > 0;
 }
 
 export function getTorrentByInfoHash(infoHash: string) {

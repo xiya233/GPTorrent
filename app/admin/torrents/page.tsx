@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { adminToggleTorrentTrustedAction } from "@/app/admin/torrents/actions";
 import { requireAdminUser } from "@/lib/auth";
 import { listAdminTorrents } from "@/lib/db";
 
@@ -53,6 +54,7 @@ export default async function AdminTorrentsPage({ searchParams }: AdminTorrentsP
                 <th>标题</th>
                 <th>上传者</th>
                 <th>状态</th>
+                <th>信任</th>
                 <th>分类</th>
                 <th className="align-right">操作</th>
               </tr>
@@ -60,36 +62,52 @@ export default async function AdminTorrentsPage({ searchParams }: AdminTorrentsP
             <tbody>
               {torrents.length === 0 ? (
                 <tr>
-                  <td className="empty-row" colSpan={6}>
+                  <td className="empty-row" colSpan={7}>
                     无匹配种子
                   </td>
                 </tr>
               ) : (
-                torrents.map((torrent) => (
-                  <tr key={torrent.id}>
-                    <td>{torrent.id}</td>
-                    <td className="torrent-title-cell">
-                      <Link className="torrent-title-link" href={`/torrent/${torrent.id}`} title={torrent.name}>
-                        {torrent.name}
-                      </Link>
-                    </td>
-                    <td>{torrent.uploader_display || "访客"}</td>
-                    <td>{torrent.status}</td>
-                    <td>{torrent.category}</td>
-                    <td className="align-right">
-                      <div className="admin-actions">
-                        {torrent.status === "active" ? (
-                          <form action={`/api/torrents/${torrent.id}/delete`} method="POST">
-                            <input name="redirectTo" type="hidden" value="/admin/torrents" />
-                            <button className="danger-btn tiny-btn" type="submit">
-                              删除
-                            </button>
-                          </form>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                torrents.map((torrent) => {
+                  const toggleTrustedAction = adminToggleTorrentTrustedAction.bind(
+                    null,
+                    torrent.id,
+                    torrent.is_trusted !== 1,
+                  );
+
+                  return (
+                    <tr key={torrent.id}>
+                      <td>{torrent.id}</td>
+                      <td className="torrent-title-cell">
+                        <Link className="torrent-title-link" href={`/torrent/${torrent.id}`} title={torrent.name}>
+                          {torrent.name}
+                        </Link>
+                      </td>
+                      <td>{torrent.uploader_display || "访客"}</td>
+                      <td>{torrent.status}</td>
+                      <td>{torrent.is_trusted === 1 ? "已信任" : "未信任"}</td>
+                      <td>{torrent.category}</td>
+                      <td className="align-right">
+                        <div className="admin-actions">
+                          {torrent.status === "active" ? (
+                            <>
+                              <form action={toggleTrustedAction}>
+                                <button className="secondary-btn tiny-btn" type="submit">
+                                  {torrent.is_trusted === 1 ? "取消信任" : "设为信任"}
+                                </button>
+                              </form>
+                              <form action={`/api/torrents/${torrent.id}/delete`} method="POST">
+                                <input name="redirectTo" type="hidden" value="/admin/torrents" />
+                                <button className="danger-btn tiny-btn" type="submit">
+                                  删除
+                                </button>
+                              </form>
+                            </>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

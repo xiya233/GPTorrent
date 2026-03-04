@@ -8,10 +8,15 @@ type CategoryPageProps = {
   params: Promise<{
     category: string;
   }>;
+  searchParams: Promise<{
+    trusted?: string;
+  }>;
 };
 
-export default async function CategoryDetailPage({ params }: CategoryPageProps) {
+export default async function CategoryDetailPage({ params, searchParams }: CategoryPageProps) {
   const { category } = await params;
+  const search = await searchParams;
+  const trustedOnly = search.trusted?.trim() === "1";
   let decoded = category;
   try {
     decoded = decodeURIComponent(category);
@@ -26,6 +31,7 @@ export default async function CategoryDetailPage({ params }: CategoryPageProps) 
 
   const torrents = listTorrents({
     category: normalized,
+    trustedOnly,
     limit: 120,
   });
 
@@ -37,6 +43,8 @@ export default async function CategoryDetailPage({ params }: CategoryPageProps) 
           返回分类
         </Link>
       </div>
+
+      {trustedOnly ? <p className="filter-hint">当前筛选：仅信任</p> : null}
 
       <TorrentTable emptyText="该分类下暂无种子" torrents={torrents} />
     </div>
