@@ -209,7 +209,12 @@ function buildPosterCandidateTimes(durationSeconds: number, defaultAtSeconds: nu
 
   const maxTime = Math.max(0.1, durationSeconds - 0.2);
   const minTime = Math.min(maxTime, 0.8);
-  const raw = SMART_POSTER_SAMPLE_FRACTIONS.map((fraction) => clamp(durationSeconds * fraction, minTime, maxTime));
+  const jitterWindow = clamp(durationSeconds * 0.01, 0.25, 2.5);
+  const raw = SMART_POSTER_SAMPLE_FRACTIONS.flatMap((fraction) => {
+    const center = clamp(durationSeconds * fraction, minTime, maxTime);
+    const jittered = clamp(center + (Math.random() * 2 - 1) * jitterWindow, minTime, maxTime);
+    return [center, jittered];
+  });
   raw.push(clamp(defaultAtSeconds, minTime, maxTime));
   const unique = [...new Set(raw.map((item) => Number(item.toFixed(3))))];
   unique.sort((a, b) => a - b);
@@ -496,6 +501,7 @@ export async function generatePosterFromVideo(input: {
   outDirAbs: string;
   atSeconds?: number;
   quality?: number;
+  avoidTimeSeconds?: number;
 }) {
   const posterAbs = path.join(input.outDirAbs, "poster.webp");
   const requestedAt = Number.isFinite(input.atSeconds) ? Math.max(0.1, Number(input.atSeconds)) : DEFAULT_POSTER_AT_SECONDS;
@@ -510,6 +516,8 @@ export async function generatePosterFromVideo(input: {
     sourceAbs: input.sourceAbs,
   });
   const candidates = buildPosterCandidateTimes(probe.durationSeconds, requestedAt);
+  const avoidTime = Number.isFinite(input.avoidTimeSeconds) ? Math.max(0, Number(input.avoidTimeSeconds)) : null;
+  const avoidWindow = clamp(probe.durationSeconds * 0.015, 2, 10);
 
   let best: { atSeconds: number; score: number } | null = null;
   let lastError = "";
@@ -520,7 +528,23 @@ export async function generatePosterFromVideo(input: {
         sourceAbs: input.sourceAbs,
         atSeconds,
       });
-      const score = scoreFrame(stats);
+      const baseScore = scoreFrame(stats);
+      if (baseScore < 0) {
+        continue;
+      }
+
+      let score = baseScore;
+      if (avoidTime !== null) {
+        const distance = Math.abs(atSeconds - avoidTime);
+        if (distance <= avoidWindow) {
+          const ratio = 1 - distance / Math.max(avoidWindow, 0.001);
+          score -= 0.2 * ratio;
+        }
+      }
+
+      // Small random tie-breaker so repeated re-picks are less deterministic.
+      score += Math.random() * 0.02;
+
       if (!best || score > best.score) {
         best = { atSeconds, score };
       }
@@ -539,7 +563,7 @@ export async function generatePosterFromVideo(input: {
     });
     return {
       posterAbs,
-      score: best.score,
+      score: Number(best.score.toFixed(6)),
       pickTime: best.atSeconds,
       strategy: "sample",
     } satisfies PosterResult;

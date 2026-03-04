@@ -14,8 +14,9 @@ function playlistUrl(fileId: number) {
   return `/offline/files/${fileId}/hls/index.m3u8`;
 }
 
-function posterUrl(fileId: number) {
-  return `/offline/files/${fileId}/poster`;
+function posterUrl(fileId: number, generatedAt: string) {
+  const version = generatedAt ? encodeURIComponent(generatedAt) : String(Date.now());
+  return `/offline/files/${fileId}/poster?v=${version}`;
 }
 
 export async function POST(_request: Request, { params }: { params: Promise<{ fileId: string }> }) {
@@ -66,7 +67,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ fi
           ? "queued"
           : file.hls_upgrade_state,
       hlsUpgradeError: file.hls_upgrade_error || "",
-      posterUrl: file.poster_status === "ready" && file.poster_path ? posterUrl(file.id) : "",
+      posterUrl:
+        file.poster_status === "ready" && file.poster_path ? posterUrl(file.id, file.poster_generated_at || "") : "",
       posterStatus: currentPosterStatus,
       posterError: file.poster_error || "",
       posterScore: Math.max(0, Number(file.poster_score || 0)),
@@ -85,7 +87,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ fi
       hlsVariantCount: Math.max(1, Math.floor(Number(file.hls_variant_count || 1))),
       hlsUpgradeState: file.hls_upgrade_state,
       hlsUpgradeError: file.hls_upgrade_error || "",
-      posterUrl: file.poster_status === "ready" && file.poster_path ? posterUrl(file.id) : "",
+      posterUrl:
+        file.poster_status === "ready" && file.poster_path ? posterUrl(file.id, file.poster_generated_at || "") : "",
       posterStatus: file.poster_status || "none",
       posterError: file.poster_error || "",
       posterScore: Math.max(0, Number(file.poster_score || 0)),

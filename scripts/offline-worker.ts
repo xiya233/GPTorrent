@@ -382,6 +382,7 @@ async function processQueuedPoster(verbose: boolean) {
       ffprobeBin: getFfprobeBin(),
       sourceAbs,
       outDirAbs,
+      avoidTimeSeconds: Math.max(0, Number(file.poster_pick_time || 0)),
     });
     const posterPath = relativeToData(poster.posterAbs);
     if (!posterPath) {
