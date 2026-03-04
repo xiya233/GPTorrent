@@ -2,10 +2,15 @@ import path from "node:path";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MagnetCopyButton } from "@/components/magnet-copy-button";
-import { OfflineJobCard } from "@/components/offline-job-card";
+import { OfflineStartButton } from "@/components/offline-start-button";
 import { TorrentImageGallery } from "@/components/torrent-image-gallery";
 import { getCurrentUser } from "@/lib/auth";
-import { getOfflineJobDetailByTorrentId, getSiteFeatureFlags, getTorrentDetailById } from "@/lib/db";
+import {
+  getOfflineJobDetailByTorrentId,
+  getSiteFeatureFlags,
+  getTorrentDetailById,
+  getUserOfflineJobDetailByTorrentId,
+} from "@/lib/db";
 import { toMediaUrl } from "@/lib/media-url";
 
 type TorrentDetailPageProps = {
@@ -91,16 +96,18 @@ export default async function TorrentDetailPage({ params }: TorrentDetailPagePro
   if (!detail || detail.torrent.status !== "active") {
     notFound();
   }
-  const offlineDetail = getOfflineJobDetailByTorrentId(torrentId);
-
   const user = await getCurrentUser();
+  const offlineDetail = user
+    ? user.role === "admin"
+      ? getOfflineJobDetailByTorrentId(torrentId)
+      : getUserOfflineJobDetailByTorrentId(user.id, torrentId)
+    : null;
   const flags = getSiteFeatureFlags();
 
   const isAdmin = user?.role === "admin";
   const isOwner = Boolean(user && detail.torrent.uploader_user_id === user.id);
   const canEdit = Boolean(isAdmin || isOwner);
   const canDelete = Boolean(canEdit && (isAdmin || flags.allowUserDeleteTorrent));
-  const canStartOffline = Boolean(user);
   const offlineFileMap =
     offlineDetail?.job.status === "completed"
       ? createOfflineFileMap(offlineDetail.files)
@@ -118,6 +125,7 @@ export default async function TorrentDetailPage({ params }: TorrentDetailPagePro
           <a className="primary-btn" href={`/download/${detail.torrent.id}`}>
             下载种子
           </a>
+          <OfflineStartButton isLoggedIn={Boolean(user)} torrentId={detail.torrent.id} />
           <MagnetCopyButton magnetUri={detail.torrent.magnet_uri} variant="primary" />
           {canEdit ? (
             <Link className="primary-btn" href={`/my/torrents/${detail.torrent.id}/edit`}>
@@ -168,14 +176,6 @@ export default async function TorrentDetailPage({ params }: TorrentDetailPagePro
           <span>Tracker更新</span>
           <strong>{detail.torrent.tracker_last_checked_at ? formatDate(detail.torrent.tracker_last_checked_at) : "待抓取"}</strong>
         </div>
-      </section>
-
-      <section className="card detail-section">
-        <OfflineJobCard
-          canStart={canStartOffline}
-          initialJob={offlineDetail?.job ?? null}
-          torrentId={detail.torrent.id}
-        />
       </section>
 
       <section className="card detail-section">

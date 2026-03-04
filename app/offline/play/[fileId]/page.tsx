@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArtOfflinePlayer } from "@/components/art-offline-player";
-import { getOfflineFileWithJob } from "@/lib/db";
+import { requireActiveUser } from "@/lib/auth";
+import { getOfflineFileWithJob, hasActiveOfflineJobAccess } from "@/lib/db";
 
 type OfflinePlayPageProps = {
   params: Promise<{ fileId: string }>;
 };
 
 export default async function OfflinePlayPage({ params }: OfflinePlayPageProps) {
+  const user = await requireActiveUser();
   const { fileId } = await params;
   const idNum = Number(fileId);
 
@@ -17,6 +19,9 @@ export default async function OfflinePlayPage({ params }: OfflinePlayPageProps) 
 
   const file = getOfflineFileWithJob(idNum);
   if (!file || file.job_status !== "completed" || file.is_video !== 1) {
+    notFound();
+  }
+  if (user.role !== "admin" && !hasActiveOfflineJobAccess(user.id, file.job_id)) {
     notFound();
   }
 

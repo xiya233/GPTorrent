@@ -17,6 +17,9 @@
 - 上传策略配置（游客/用户种子大小、图片大小、游客图片开关）
 - 分类扩展（成人、其他）
 - 离线下载与在线播放（qBittorrent + FFmpeg + ArtPlayer，需启动 offline worker）
+- 离线任务中心（`/my/offline`，用户名下拉菜单入口）
+- 离线存储配额（默认每用户 10GB，管理员可在用户管理页调整）
+- 离线任务总览（`/admin/offline`，支持筛选与删除任务）
 
 技术栈：
 - Next.js App Router + Server Actions
@@ -87,10 +90,16 @@ mise exec bun -- bun run offline:worker
 mise exec bun -- bun run offline:worker --once --verbose
 ```
 
+离线 worker 日志中的失败计数已拆分为：
+- `queued_failed`：排队阶段失败（如 qB 未启动、登录失败、配置错误）
+- `downloading_failed`：下载阶段失败
+- `failed_total`：总失败数
+
 在线播放页面使用 ArtPlayer，支持倍速、画中画、截图、快捷键与播放记忆。
 HLS 转码已支持多码率（默认 360p/720p/1080p，按源分辨率裁剪）；历史单码率视频会在播放时后台按需升级。
 视频在播放前会显示封面图（WebP）；封面采用多时间点智能抽帧，尽量规避黑屏首帧。
 历史视频会在首次进入播放页时后台按需补齐封面；播放页可手动“重选封面”。
+离线资源（下载/播放/HLS/封面）仅登录用户可访问，且默认仅任务拥有者可访问（管理员可访问全部）。
 
 清理过期离线资源：
 

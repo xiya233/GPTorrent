@@ -81,6 +81,13 @@ export function HeaderUserMenu({ username, avatarUrl, isAdmin, logoutAction }: H
             账号设置
           </Link>
           <Link
+            className={`user-menu-item${pathname.startsWith("/my/offline") ? " is-active" : ""}`}
+            href="/my/offline"
+            role="menuitem"
+          >
+            离线下载
+          </Link>
+          <Link
             className={`user-menu-item${pathname.startsWith("/my/torrents") ? " is-active" : ""}`}
             href="/my/torrents"
             role="menuitem"

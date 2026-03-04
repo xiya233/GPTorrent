@@ -7,6 +7,7 @@ import {
   deleteSessionsByUserId,
   getUserById,
   getUserByUsername,
+  setUserOfflineQuotaBytes,
   setUserStatus,
   softDeleteUser,
 } from "@/lib/db";
@@ -110,4 +111,26 @@ export async function adminDeleteUserAction(userId: number): Promise<void> {
   softDeleteUser(userId);
   deleteSessionsByUserId(userId);
   revalidatePath("/admin/users");
+}
+
+export async function adminUpdateUserOfflineQuotaAction(userId: number, formData: FormData): Promise<void> {
+  await requireAdminUser();
+
+  const target = getUserById(userId);
+  if (!target || target.status === "deleted") {
+    return;
+  }
+
+  const quotaGbRaw = ((formData.get("offlineQuotaGb") as string | null) ?? "").trim();
+  const quotaGb = Number(quotaGbRaw);
+  if (!Number.isFinite(quotaGb)) {
+    return;
+  }
+
+  const safeGb = Math.max(1, Math.min(10240, Math.floor(quotaGb)));
+  const quotaBytes = safeGb * 1024 * 1024 * 1024;
+
+  setUserOfflineQuotaBytes(userId, quotaBytes);
+  revalidatePath("/admin/users");
+  revalidatePath("/my/offline");
 }

@@ -1346,6 +1346,21 @@ tbody tr:last-child td {
   gap: 6px;
 }
 
+.admin-inline-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-inline-form input {
+  width: 84px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  color: var(--text-primary);
+  padding: 4px 8px;
+}
+
 .site-grid {
   grid-template-columns: minmax(0, 1fr) 320px;
 }
@@ -1402,6 +1417,16 @@ tbody tr:last-child td {
   align-items: center;
   flex-shrink: 0;
   gap: 8px;
+}
+
+.offline-start-wrap {
+  display: grid;
+  gap: 4px;
+}
+
+.offline-start-error {
+  margin: 0;
+  font-size: 0.76rem;
 }
 
 .detail-meta-grid {
@@ -1660,6 +1685,28 @@ tbody tr:last-child td {
   gap: 8px;
 }
 
+.offline-quota-card {
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.offline-quota-card p {
+  margin: 4px 0 0;
+}
+
+.my-offline-list {
+  margin-top: 10px;
+}
+
+.offline-row-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
 .new-image-list {
   display: grid;
   gap: 4px;
@@ -1690,6 +1737,11 @@ tbody tr:last-child td {
 
   .art-player-container {
     min-height: 180px;
+  }
+
+  .offline-quota-card {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 

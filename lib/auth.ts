@@ -96,6 +96,7 @@ export function getUserStateFromToken(token?: string | null) {
       bio: session.bio,
       role: session.role,
       status: session.status,
+      offline_quota_bytes: session.offline_quota_bytes,
     },
     blocked: false,
   };

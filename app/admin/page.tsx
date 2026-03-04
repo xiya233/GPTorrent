@@ -33,6 +33,10 @@ export default async function AdminPage() {
           <h2>种子管理</h2>
           <p>查看所有种子并删除任意记录</p>
         </Link>
+        <Link className="card admin-link-card" href="/admin/offline">
+          <h2>离线任务</h2>
+          <p>查看、筛选并删除离线下载任务</p>
+        </Link>
         <Link className="card admin-link-card" href="/admin/site">
           <h2>站点配置</h2>
           <p>设置 LOGO/标题及上传权限开关</p>

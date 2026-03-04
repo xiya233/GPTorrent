@@ -15,6 +15,7 @@ import {
   markOfflineJobDownloading,
   markOfflineJobFailed,
   replaceOfflineFiles,
+  settleOfflineUserJobBilling,
   setOfflineFilePosterState,
   setOfflineFileUpgradeState,
   updateOfflineFileHlsProgress,
@@ -110,7 +111,7 @@ async function processQueuedJobs(verbose: boolean) {
   for (const job of jobs) {
     try {
       if (job.torrent_status !== "active") {
-        markOfflineJobFailed(job.id, "种子已不可用");
+        markOfflineJobFailed(job.id, "种子已不可用", "queued");
         queuedFailed += 1;
         continue;
       }
@@ -118,14 +119,14 @@ async function processQueuedJobs(verbose: boolean) {
       const infoHash = (job.torrent_info_hash || "").trim().toLowerCase();
       const magnetUri = (job.torrent_magnet_uri || "").trim();
       if (!infoHash || !magnetUri) {
-        markOfflineJobFailed(job.id, "缺少 infohash 或磁力链接");
+        markOfflineJobFailed(job.id, "缺少 infohash 或磁力链接", "queued");
         queuedFailed += 1;
         continue;
       }
 
       const savePathAbs = resolveDataRelativePath(job.save_path);
       if (!savePathAbs) {
-        markOfflineJobFailed(job.id, "离线路径非法");
+        markOfflineJobFailed(job.id, "离线路径非法", "queued");
         queuedFailed += 1;
         continue;
       }
@@ -145,7 +146,7 @@ async function processQueuedJobs(verbose: boolean) {
         }
       }
     } catch (error) {
-      markOfflineJobFailed(job.id, formatError(error));
+      markOfflineJobFailed(job.id, formatError(error), "queued");
       queuedFailed += 1;
       if (verbose) {
         console.log(`[offline-worker][verbose] queued-failed job=${job.id} reason=${formatError(error)}`);
@@ -174,14 +175,14 @@ async function processDownloadingJobs(verbose: boolean) {
     try {
       const hash = (job.qb_hash || "").trim().toLowerCase();
       if (!hash) {
-        markOfflineJobFailed(job.id, "缺少 qB 哈希");
+        markOfflineJobFailed(job.id, "缺少 qB 哈希", "downloading");
         failed += 1;
         continue;
       }
 
       const info = await qb.getTorrentInfo(hash);
       if (!info) {
-        markOfflineJobFailed(job.id, "qB 任务不存在");
+        markOfflineJobFailed(job.id, "qB 任务不存在", "downloading");
         failed += 1;
         continue;
       }
@@ -193,7 +194,7 @@ async function processDownloadingJobs(verbose: boolean) {
 
       const state = String(info.state || "").toLowerCase();
       if (state.includes("error") || state.includes("missing")) {
-        markOfflineJobFailed(job.id, `qB 任务异常状态: ${state}`);
+        markOfflineJobFailed(job.id, `qB 任务异常状态: ${state}`, "downloading");
         failed += 1;
         continue;
       }
@@ -213,7 +214,7 @@ async function processDownloadingJobs(verbose: boolean) {
 
       const qbFiles = await qb.getTorrentFiles(hash);
       if (qbFiles.length === 0) {
-        markOfflineJobFailed(job.id, "离线完成但未获取到文件列表");
+        markOfflineJobFailed(job.id, "离线完成但未获取到文件列表", "downloading");
         failed += 1;
         continue;
       }
@@ -240,6 +241,7 @@ async function processDownloadingJobs(verbose: boolean) {
         downloadedBytes: Math.max(downloadedBytes, totalBytes),
         retentionDays: getOfflineRetentionDays(),
       });
+      settleOfflineUserJobBilling(job.id, Math.max(totalBytes, downloadedBytes));
 
       try {
         await qb.deleteTorrent(hash, false);
@@ -252,7 +254,7 @@ async function processDownloadingJobs(verbose: boolean) {
         console.log(`[offline-worker][verbose] completed job=${job.id} files=${mapped.length}`);
       }
     } catch (error) {
-      markOfflineJobFailed(job.id, formatError(error));
+      markOfflineJobFailed(job.id, formatError(error), "downloading");
       failed += 1;
       if (verbose) {
         console.log(`[offline-worker][verbose] downloading-failed job=${job.id} reason=${formatError(error)}`);
@@ -512,8 +514,9 @@ async function run() {
     const upgradeStat = await processQueuedUpgradeTranscode(verbose);
     const posterStat = await processQueuedPoster(verbose);
 
+    const failedTotal = queuedStat.queuedFailed + downloadingStat.failed;
     console.log(
-      `[offline-worker] queued=${queuedStat.queuedPicked}/${queuedStat.queuedStarted}/${queuedStat.queuedFailed} downloading=${downloadingStat.downloading} completed=${downloadingStat.completed} failed=${downloadingStat.failed} transcode=${transcodeStat.transcodePicked}/${transcodeStat.transcodeReady}/${transcodeStat.transcodeFailed} upgrade=${upgradeStat.upgradePicked}/${upgradeStat.upgradeReady}/${upgradeStat.upgradeFailed} poster=${posterStat.posterPicked}/${posterStat.posterReady}/${posterStat.posterFailed}`,
+      `[offline-worker] queued_picked=${queuedStat.queuedPicked} queued_started=${queuedStat.queuedStarted} queued_failed=${queuedStat.queuedFailed} downloading=${downloadingStat.downloading} completed=${downloadingStat.completed} downloading_failed=${downloadingStat.failed} failed_total=${failedTotal} transcode=${transcodeStat.transcodePicked}/${transcodeStat.transcodeReady}/${transcodeStat.transcodeFailed} upgrade=${upgradeStat.upgradePicked}/${upgradeStat.upgradeReady}/${upgradeStat.upgradeFailed} poster=${posterStat.posterPicked}/${posterStat.posterReady}/${posterStat.posterFailed}`,
     );
 
     if (once) {

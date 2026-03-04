@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { CreateUserForm } from "@/app/admin/users/create-user-form";
-import { adminBanUserAction, adminDeleteUserAction, adminUnbanUserAction } from "@/app/admin/users/actions";
+import {
+  adminBanUserAction,
+  adminDeleteUserAction,
+  adminUnbanUserAction,
+  adminUpdateUserOfflineQuotaAction,
+} from "@/app/admin/users/actions";
 import { requireAdminUser } from "@/lib/auth";
 import { listUsers, type UserStatus } from "@/lib/db";
 
@@ -55,6 +60,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                   <th>用户名</th>
                   <th>角色</th>
                   <th>状态</th>
+                  <th>离线配额</th>
                   <th>创建时间</th>
                   <th className="align-right">操作</th>
                 </tr>
@@ -62,7 +68,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
               <tbody>
                 {users.length === 0 ? (
                   <tr>
-                    <td className="empty-row" colSpan={6}>
+                    <td className="empty-row" colSpan={7}>
                       无匹配用户
                     </td>
                   </tr>
@@ -71,6 +77,8 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                     const banAction = adminBanUserAction.bind(null, user.id);
                     const unbanAction = adminUnbanUserAction.bind(null, user.id);
                     const deleteAction = adminDeleteUserAction.bind(null, user.id);
+                    const updateQuotaAction = adminUpdateUserOfflineQuotaAction.bind(null, user.id);
+                    const quotaGb = Math.max(1, Math.floor((user.offline_quota_bytes || 0) / (1024 * 1024 * 1024)));
 
                     return (
                       <tr key={user.id}>
@@ -78,6 +86,14 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                         <td>{user.username}</td>
                         <td>{user.role}</td>
                         <td>{user.status}</td>
+                        <td>
+                          <form action={updateQuotaAction} className="admin-inline-form">
+                            <input defaultValue={quotaGb} min={1} name="offlineQuotaGb" type="number" />
+                            <button className="secondary-btn tiny-btn" type="submit">
+                              保存
+                            </button>
+                          </form>
+                        </td>
                         <td className="muted">{new Date(user.created_at).toLocaleString("zh-CN")}</td>
                         <td className="align-right">
                           <div className="admin-actions">

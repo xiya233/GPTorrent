@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   getOfflineFileWithJob,
   markOfflineFileHlsStatus,
@@ -6,8 +6,10 @@ import {
   queueOfflineFileUpgrade,
   touchOfflineFileAccess,
   touchOfflineJobAccess,
+  touchOfflineUserJobAccess,
   updateOfflineFileHlsProgress,
 } from "@/lib/db";
+import { canAccessOfflineJob, getRequestAuthUser } from "@/lib/offline/access";
 import { getOfflineRetentionDays } from "@/lib/offline/config";
 
 function playlistUrl(fileId: number) {
@@ -19,7 +21,7 @@ function posterUrl(fileId: number, generatedAt: string) {
   return `/offline/files/${fileId}/poster?v=${version}`;
 }
 
-export async function POST(_request: Request, { params }: { params: Promise<{ fileId: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ fileId: string }> }) {
   const { fileId } = await params;
   const idNum = Number(fileId);
 
@@ -27,9 +29,17 @@ export async function POST(_request: Request, { params }: { params: Promise<{ fi
     return NextResponse.json({ error: "invalid id" }, { status: 400 });
   }
 
+  const { user, blocked } = getRequestAuthUser(request);
+  if (!user || blocked) {
+    return NextResponse.json({ error: "请先登录" }, { status: 401 });
+  }
+
   const file = getOfflineFileWithJob(idNum);
   if (!file) {
     return NextResponse.json({ error: "文件不存在" }, { status: 404 });
+  }
+  if (!canAccessOfflineJob(user, file.job_id)) {
+    return NextResponse.json({ error: "无权限访问该离线资源" }, { status: 403 });
   }
 
   if (file.job_status !== "completed") {
@@ -42,6 +52,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ fi
 
   touchOfflineJobAccess(file.job_id, getOfflineRetentionDays());
   touchOfflineFileAccess(file.id);
+  touchOfflineUserJobAccess(user.id, file.job_id);
 
   if (file.hls_status === "ready") {
     if (file.hls_variant_count <= 1 && (file.hls_upgrade_state === "none" || file.hls_upgrade_state === "failed")) {
