@@ -48,8 +48,9 @@ function renderTags(row: TorrentRow) {
   const tags = row.tags
     .split(",")
     .map((tag) => tag.trim())
-    .filter(Boolean)
-    .slice(0, 2);
+    .filter(Boolean);
+  const visibleTags = tags.slice(0, 4);
+  const hiddenTagCount = Math.max(tags.length - visibleTags.length, 0);
 
   return (
     <div className="tag-list">
@@ -60,11 +61,16 @@ function renderTags(row: TorrentRow) {
       ) : (
         <span className="small-tag">抓取: 待更新</span>
       )}
-      {tags.map((tag) => (
-        <span className="small-tag" key={tag}>
+      {visibleTags.map((tag) => (
+        <span className="small-tag tag-user" key={tag} title={tag}>
           {tag}
         </span>
       ))}
+      {hiddenTagCount > 0 ? (
+        <span className="small-tag tag-more" title={`还有 ${hiddenTagCount} 个标签`}>
+          +{hiddenTagCount}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -83,15 +89,15 @@ export function TorrentTable({ torrents, emptyText = "没有匹配的种子" }: 
         <table className="torrent-list-table">
           <thead>
             <tr>
-              <th>类型</th>
+              <th className="torrent-col-type">类型</th>
               <th>名称</th>
-              <th>发布者</th>
-              <th className="align-center">下载</th>
-              <th className="align-right">大小</th>
-              <th className="align-right">日期</th>
-              <th className="align-center">↑</th>
-              <th className="align-center">↓</th>
-              <th className="align-center">✓</th>
+              <th className="torrent-col-uploader">发布者</th>
+              <th className="align-center torrent-col-download">下载</th>
+              <th className="align-right torrent-col-size">大小</th>
+              <th className="align-right torrent-col-date">日期</th>
+              <th className="align-center torrent-col-stats">↑</th>
+              <th className="align-center torrent-col-stats">↓</th>
+              <th className="align-center torrent-col-stats">✓</th>
             </tr>
           </thead>
           <tbody>
@@ -104,7 +110,7 @@ export function TorrentTable({ torrents, emptyText = "没有匹配的种子" }: 
             ) : (
               torrents.map((row) => (
                 <tr key={row.id}>
-                  <td>
+                  <td className="torrent-col-type">
                     <Link href={`/categories/${row.category}`}>
                       <span className={`type-badge ${badgeClass[row.category] ?? "badge-gray"}`}>{row.category}</span>
                     </Link>
@@ -119,8 +125,10 @@ export function TorrentTable({ torrents, emptyText = "没有匹配的种子" }: 
                       {renderTags(row)}
                     </div>
                   </td>
-                  <td className="muted uploader-name">{getUploaderName(row)}</td>
-                  <td className="align-center">
+                  <td className="muted uploader-name torrent-col-uploader" title={getUploaderName(row)}>
+                    {getUploaderName(row)}
+                  </td>
+                  <td className="align-center torrent-col-download">
                     <div className="action-icons">
                       <a aria-label="下载" className="icon-button tiny" href={`/download/${row.id}`}>
                         <Download size={16} />
@@ -128,11 +136,11 @@ export function TorrentTable({ torrents, emptyText = "没有匹配的种子" }: 
                       <MagnetCopyButton magnetUri={row.magnet_uri} />
                     </div>
                   </td>
-                  <td className="align-right muted">{row.size_display}</td>
-                  <td className="align-right muted">{formatRelativeTime(row.created_at)}</td>
-                  <td className="align-center seeds">{row.seeds.toLocaleString("zh-CN")}</td>
-                  <td className="align-center leechers">{row.leechers.toLocaleString("zh-CN")}</td>
-                  <td className="align-center muted">{row.completed.toLocaleString("zh-CN")}</td>
+                  <td className="align-right muted torrent-col-size">{row.size_display}</td>
+                  <td className="align-right muted torrent-col-date">{formatRelativeTime(row.created_at)}</td>
+                  <td className="align-center seeds torrent-col-stats">{row.seeds.toLocaleString("zh-CN")}</td>
+                  <td className="align-center leechers torrent-col-stats">{row.leechers.toLocaleString("zh-CN")}</td>
+                  <td className="align-center muted torrent-col-stats">{row.completed.toLocaleString("zh-CN")}</td>
                 </tr>
               ))
             )}

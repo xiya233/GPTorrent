@@ -236,6 +236,7 @@ a {
 
 .table-wrap {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
@@ -250,9 +251,13 @@ table {
   table-layout: fixed;
 }
 
+.torrent-list-table {
+  min-width: 1040px;
+}
+
 .torrent-list-table th:nth-child(2),
 .torrent-list-table td:nth-child(2) {
-  width: 42%;
+  width: 41%;
 }
 
 .my-torrents-table th:nth-child(2),
@@ -307,6 +312,7 @@ tbody tr:last-child td {
   font-size: 0.72rem;
   font-weight: 600;
   padding: 4px 10px;
+  white-space: nowrap;
 }
 
 .badge-red {
@@ -382,21 +388,82 @@ tbody tr:last-child td {
 .tag-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
+  column-gap: 6px;
+  row-gap: 6px;
   margin-top: 6px;
 }
 
 .small-tag {
+  display: inline-flex;
+  align-items: center;
   border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 0.67rem;
   color: var(--text-secondary);
-  padding: 1px 6px;
+  height: 20px;
+  line-height: 1;
+  vertical-align: middle;
+  padding: 0 6px;
+  white-space: nowrap;
 }
 
 .small-tag.trusted {
   border-color: color-mix(in srgb, var(--accent-blue) 40%, var(--border));
   color: var(--accent-blue);
+}
+
+.small-tag.tag-user {
+  max-width: 12ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.small-tag.tag-more {
+  font-weight: 600;
+}
+
+.torrent-list-table .torrent-col-type {
+  width: 72px;
+  white-space: nowrap;
+  word-break: keep-all;
+}
+
+.torrent-list-table .torrent-col-uploader {
+  width: 96px;
+  white-space: nowrap;
+  word-break: keep-all;
+}
+
+.torrent-list-table td.torrent-col-uploader {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.torrent-list-table .torrent-col-download {
+  width: 84px;
+  white-space: nowrap;
+}
+
+.torrent-list-table .torrent-col-size {
+  width: 96px;
+}
+
+.torrent-list-table .torrent-col-date {
+  width: 102px;
+}
+
+.torrent-list-table .torrent-col-stats {
+  width: 56px;
+}
+
+.torrent-list-table .torrent-col-size,
+.torrent-list-table .torrent-col-date,
+.torrent-list-table .torrent-col-stats {
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .action-icons {
