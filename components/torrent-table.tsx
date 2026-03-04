@@ -89,10 +89,10 @@ export function TorrentTable({ torrents, emptyText = "没有匹配的种子" }: 
         <table className="torrent-list-table">
           <thead>
             <tr>
-              <th className="torrent-col-type">类型</th>
-              <th>名称</th>
+              <th className="torrent-col-type torrent-col-head-center">类型</th>
+              <th className="torrent-col-name torrent-col-head-center">名称</th>
               <th className="torrent-col-uploader">发布者</th>
-              <th className="align-center torrent-col-download">下载</th>
+              <th className="align-center torrent-col-download torrent-col-head-center">下载</th>
               <th className="align-right torrent-col-size">大小</th>
               <th className="align-right torrent-col-date">日期</th>
               <th className="align-center torrent-col-stats">↑</th>
@@ -110,7 +110,7 @@ export function TorrentTable({ torrents, emptyText = "没有匹配的种子" }: 
             ) : (
               torrents.map((row) => (
                 <tr key={row.id}>
-                  <td className="torrent-col-type">
+                  <td className="torrent-col-type align-center">
                     <Link href={`/categories/${row.category}`}>
                       <span className={`type-badge ${badgeClass[row.category] ?? "badge-gray"}`}>{row.category}</span>
                     </Link>
