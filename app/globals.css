@@ -1382,9 +1382,25 @@ tbody tr:last-child td {
   max-width: 1100px;
 }
 
+.detail-heading-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.detail-title {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .detail-actions {
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0;
   gap: 8px;
 }
 
@@ -1465,9 +1481,216 @@ tbody tr:last-child td {
   font-size: 0.86rem;
 }
 
+.detail-file-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.offline-job-card {
+  display: grid;
+  gap: 10px;
+}
+
+.offline-job-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.offline-job-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.offline-job-meta {
+  display: grid;
+  gap: 6px;
+}
+
+.offline-job-meta p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+}
+
+.offline-progress-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+}
+
+.offline-progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2563eb, #16a34a);
+  transition: width 0.2s ease;
+}
+
+.offline-player-page {
+  max-width: 980px;
+}
+
+.offline-player-card {
+  padding: 16px;
+}
+
+.offline-player-file {
+  margin: 0 0 10px;
+  font-size: 0.84rem;
+  overflow-wrap: anywhere;
+}
+
+.offline-player-wrap {
+  display: grid;
+  gap: 10px;
+}
+
+.art-player-shell {
+  display: grid;
+  gap: 12px;
+}
+
+.art-player-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.art-player-meta {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.art-player-file {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.art-player-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.art-player-container {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  min-height: 220px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #060606;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+}
+
+.art-player-container .art-video-player {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0;
+  background: #000;
+}
+
+.art-player-status {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+
+.art-player-status p {
+  margin: 0;
+}
+
+.art-progress-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text-primary) 10%, transparent);
+}
+
+.art-progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0ea5e9, #22c55e);
+  transition: width 0.2s ease;
+}
+
+.art-player-actions {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.offline-video {
+  width: 100%;
+  max-height: 76vh;
+  background: #000;
+  border-radius: 12px;
+}
+
+.offline-player-status p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+}
+
+.offline-player-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
 .new-image-list {
   display: grid;
   gap: 4px;
+}
+
+@media (max-width: 760px) {
+  .detail-heading-row {
+    align-items: flex-start;
+  }
+
+  .detail-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .detail-title {
+    max-width: 100%;
+  }
+
+  .art-player-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .art-player-tools {
+    justify-content: flex-start;
+  }
+
+  .art-player-container {
+    min-height: 180px;
+  }
 }
 
 @media (max-width: 1020px) {

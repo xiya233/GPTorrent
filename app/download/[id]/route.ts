@@ -1,5 +1,7 @@
-import { readFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
 import path from "node:path";
+import { Readable } from "node:stream";
 import { getTorrentById } from "@/lib/db";
 
 function safeFileName(name: string) {
@@ -28,13 +30,19 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
 
   try {
-    const file = await readFile(absolutePath);
+    const meta = await stat(absolutePath);
+    if (!meta.isFile()) {
+      return new Response("Not Found", { status: 404 });
+    }
+    const file = createReadStream(absolutePath);
     const filename = safeFileName(row.name);
 
-    return new Response(file, {
+    return new Response(Readable.toWeb(file) as unknown as ReadableStream, {
       headers: {
         "Content-Type": "application/x-bittorrent",
         "Content-Disposition": `attachment; filename=\"${filename}\"`,
+        "Content-Length": String(meta.size),
+        "Accept-Ranges": "bytes",
         "Cache-Control": "no-store",
       },
     });

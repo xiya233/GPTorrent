@@ -16,6 +16,7 @@
 - 种子图片 WebP 自动转码与详情灯箱缩放
 - 上传策略配置（游客/用户种子大小、图片大小、游客图片开关）
 - 分类扩展（成人、其他）
+- 离线下载与在线播放（qBittorrent + FFmpeg + ArtPlayer，需启动 offline worker）
 
 技术栈：
 - Next.js App Router + Server Actions
@@ -64,6 +65,36 @@ mise exec bun -- bun run tracker:worker --once --verbose
 
 建议使用 `systemd/pm2/supervisor` 守护该进程。
 
+## 离线下载 Worker
+
+先配置环境变量：
+
+```bash
+export QBITTORRENT_URL='http://127.0.0.1:8080'
+export QBITTORRENT_USERNAME='admin'
+export QBITTORRENT_PASSWORD='adminadmin'
+export OFFLINE_MAX_CONCURRENCY=2
+export OFFLINE_RETENTION_DAYS=7
+export FFMPEG_BIN='ffmpeg'
+export FFPROBE_BIN='ffprobe'
+```
+
+启动离线任务 worker：
+
+```bash
+mise exec bun -- bun run offline:worker
+# 单次执行并打印详细日志
+mise exec bun -- bun run offline:worker --once --verbose
+```
+
+在线播放页面使用 ArtPlayer，支持倍速、画中画、截图、快捷键与播放记忆。
+
+清理过期离线资源：
+
+```bash
+mise exec bun -- bun run offline:cleanup
+```
+
 ## 元数据补全与清理脚本
 
 ```bash
@@ -85,6 +116,8 @@ export TORRENT_CLEANUP_RETENTION_DAYS=7
 - 数据库文件：`data/btshare.sqlite`
 - 种子文件：`data/uploads/`
 - 种子图片：`data/torrent-images/`
+- 离线文件：`data/offline/raw/`
+- HLS 转码输出：`data/offline/hls/`
 - 头像文件：`data/avatars/`
 - 站点 LOGO：`data/site/`
 - 验证码挑战：`captcha_challenges`（SQLite 表）

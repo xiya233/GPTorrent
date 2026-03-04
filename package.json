@@ -9,13 +9,17 @@
     "lint": "bunx --bun next lint",
     "db:init": "bun run scripts/init-db.ts",
     "tracker:worker": "bun run scripts/tracker-worker.ts",
+    "offline:worker": "bun run scripts/offline-worker.ts",
+    "offline:cleanup": "bun run scripts/offline-cleanup.ts",
     "torrents:backfill": "bun run scripts/backfill-torrent-meta.ts",
     "torrents:cleanup": "bun run scripts/cleanup-torrents.ts"
   },
   "dependencies": {
     "@noble/hashes": "^2.0.1",
+    "artplayer": "^5.3.0",
     "bencode": "^4.0.0",
     "bittorrent-tracker": "^11.2.2",
+    "hls.js": "^1.6.14",
     "lucide-react": "^0.576.0",
     "next": "^16.1.6",
     "parse-torrent": "^11.0.19",

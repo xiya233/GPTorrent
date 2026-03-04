@@ -12,6 +12,8 @@ fs.mkdirSync(dataDir, { recursive: true });
 export type UserRole = "user" | "admin";
 export type UserStatus = "active" | "banned" | "deleted";
 export type TorrentStatus = "active" | "deleted_user" | "deleted_admin";
+export type OfflineJobStatus = "queued" | "downloading" | "completed" | "failed" | "expired";
+export type HlsStatus = "none" | "pending" | "running" | "ready" | "failed";
 
 export type TorrentRow = {
   id: number;
@@ -75,6 +77,48 @@ export type TorrentDetail = {
   trackers: TorrentTrackerRow[];
   files: TorrentFileRow[];
   images: TorrentImageRow[];
+};
+
+export type OfflineJobRow = {
+  id: number;
+  torrent_id: number;
+  requested_by_user_id: number;
+  status: OfflineJobStatus;
+  qb_hash: string;
+  save_path: string;
+  total_bytes: number;
+  downloaded_bytes: number;
+  progress: number;
+  download_speed: number;
+  eta_seconds: number | null;
+  error_message: string;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+  last_accessed_at: string;
+  expires_at: string | null;
+};
+
+export type OfflineFileRow = {
+  id: number;
+  job_id: number;
+  torrent_file_id: number | null;
+  relative_path: string;
+  size_bytes: number;
+  mime_type: string;
+  is_video: number;
+  hls_status: HlsStatus;
+  hls_progress: number;
+  hls_playlist_path: string;
+  hls_error: string;
+  created_at: string;
+  updated_at: string;
+  last_accessed_at: string;
+};
+
+export type OfflineJobDetail = {
+  job: OfflineJobRow;
+  files: OfflineFileRow[];
 };
 
 export type AuthUser = {
@@ -270,18 +314,74 @@ CREATE TABLE IF NOT EXISTS captcha_challenges (
   client_ip TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS offline_jobs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  torrent_id INTEGER NOT NULL,
+  requested_by_user_id INTEGER NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('queued', 'downloading', 'completed', 'failed', 'expired')),
+  qb_hash TEXT NOT NULL DEFAULT '',
+  save_path TEXT NOT NULL,
+  total_bytes INTEGER NOT NULL DEFAULT 0,
+  downloaded_bytes INTEGER NOT NULL DEFAULT 0,
+  progress REAL NOT NULL DEFAULT 0,
+  download_speed INTEGER NOT NULL DEFAULT 0,
+  eta_seconds INTEGER,
+  error_message TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  completed_at TEXT,
+  last_accessed_at TEXT NOT NULL,
+  expires_at TEXT,
+  FOREIGN KEY(torrent_id) REFERENCES torrents(id),
+  FOREIGN KEY(requested_by_user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS offline_files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id INTEGER NOT NULL,
+  torrent_file_id INTEGER,
+  relative_path TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  mime_type TEXT NOT NULL DEFAULT '',
+  is_video INTEGER NOT NULL DEFAULT 0,
+  hls_status TEXT NOT NULL DEFAULT 'none' CHECK(hls_status IN ('none', 'pending', 'running', 'ready', 'failed')),
+  hls_progress REAL NOT NULL DEFAULT 0,
+  hls_playlist_path TEXT NOT NULL DEFAULT '',
+  hls_error TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  last_accessed_at TEXT NOT NULL,
+  FOREIGN KEY(job_id) REFERENCES offline_jobs(id),
+  FOREIGN KEY(torrent_file_id) REFERENCES torrent_files(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_torrent_trackers_torrent_id ON torrent_trackers(torrent_id);
 CREATE INDEX IF NOT EXISTS idx_torrent_files_torrent_id ON torrent_files(torrent_id);
 CREATE INDEX IF NOT EXISTS idx_torrent_images_torrent_id ON torrent_images(torrent_id);
 CREATE INDEX IF NOT EXISTS idx_captcha_expires_at ON captcha_challenges(expires_at);
+CREATE INDEX IF NOT EXISTS idx_offline_jobs_torrent_id ON offline_jobs(torrent_id);
+CREATE INDEX IF NOT EXISTS idx_offline_jobs_status ON offline_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_offline_files_job_id ON offline_files(job_id);
+CREATE INDEX IF NOT EXISTS idx_offline_files_hls_status ON offline_files(hls_status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_offline_files_job_path_unique ON offline_files(job_id, relative_path);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_offline_jobs_active_torrent_unique
+  ON offline_jobs(torrent_id)
+  WHERE status IN ('queued', 'downloading', 'completed');
 `);
 
 function ensureColumn(table: string, column: string, alterSql: string) {
   const columns = db.query(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
   if (!columns.some((item) => item.name === column)) {
-    db.exec(alterSql);
+    try {
+      db.exec(alterSql);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes("duplicate column name")) {
+        throw error;
+      }
+    }
   }
 }
 
@@ -345,6 +445,11 @@ ensureColumn(
   "site_settings",
   "allow_user_register",
   "ALTER TABLE site_settings ADD COLUMN allow_user_register INTEGER NOT NULL DEFAULT 1",
+);
+ensureColumn(
+  "offline_files",
+  "hls_progress",
+  "ALTER TABLE offline_files ADD COLUMN hls_progress REAL NOT NULL DEFAULT 0",
 );
 
 db.exec(
@@ -425,6 +530,17 @@ function splitTags(tags: string) {
     .split(",")
     .map((tag) => tag.trim())
     .filter(Boolean);
+}
+
+function addDaysIso(baseIso: string, days: number) {
+  const safeDays = Number.isFinite(days) && days > 0 ? Math.floor(days) : 7;
+  return new Date(Date.parse(baseIso) + safeDays * 24 * 60 * 60 * 1000).toISOString();
+}
+
+export function expireOfflineJobsByNow(nowIso = new Date().toISOString()) {
+  db.query(
+    "UPDATE offline_jobs SET status = 'expired', updated_at = ? WHERE status = 'completed' AND expires_at IS NOT NULL AND expires_at <= ?",
+  ).run(nowIso, nowIso);
 }
 
 export function listTorrents(params: { q?: string; category?: string; limit?: number } = {}) {
@@ -601,6 +717,394 @@ export function getTorrentDetailById(id: number) {
     files,
     images,
   } as TorrentDetail;
+}
+
+export function getOfflineJobById(jobId: number) {
+  expireOfflineJobsByNow();
+  const row = db.query("SELECT * FROM offline_jobs WHERE id = ? LIMIT 1").get(jobId);
+  return (row as OfflineJobRow | null) ?? null;
+}
+
+export function getLatestOfflineJobByTorrentId(torrentId: number) {
+  expireOfflineJobsByNow();
+  const row = db
+    .query(
+      "SELECT * FROM offline_jobs WHERE torrent_id = ? AND status != 'expired' ORDER BY id DESC LIMIT 1",
+    )
+    .get(torrentId);
+  return (row as OfflineJobRow | null) ?? null;
+}
+
+export function getActiveOfflineJobByTorrentId(torrentId: number) {
+  expireOfflineJobsByNow();
+  const row = db
+    .query(
+      "SELECT * FROM offline_jobs WHERE torrent_id = ? AND status IN ('queued', 'downloading', 'completed') ORDER BY id DESC LIMIT 1",
+    )
+    .get(torrentId);
+  return (row as OfflineJobRow | null) ?? null;
+}
+
+export function listOfflineFilesByJobId(jobId: number) {
+  const rows = db
+    .query("SELECT * FROM offline_files WHERE job_id = ? ORDER BY id ASC")
+    .all(jobId) as OfflineFileRow[];
+  return rows;
+}
+
+export function getOfflineJobDetailByTorrentId(torrentId: number): OfflineJobDetail | null {
+  const job = getLatestOfflineJobByTorrentId(torrentId);
+  if (!job) {
+    return null;
+  }
+  const files = listOfflineFilesByJobId(job.id);
+  return { job, files };
+}
+
+export function createOfflineJob(input: {
+  torrentId: number;
+  requestedByUserId: number;
+  savePath: string;
+  retentionDays: number;
+}) {
+  const now = new Date().toISOString();
+  expireOfflineJobsByNow(now);
+
+  const tx = db.transaction(() => {
+    const existing = db
+      .query(
+        "SELECT * FROM offline_jobs WHERE torrent_id = ? AND status IN ('queued', 'downloading', 'completed') ORDER BY id DESC LIMIT 1",
+      )
+      .get(input.torrentId) as OfflineJobRow | null;
+
+    if (existing) {
+      return { created: false, job: existing };
+    }
+
+    const expiresAt = addDaysIso(now, input.retentionDays);
+
+    db.query(
+      `
+      INSERT INTO offline_jobs (
+        torrent_id,
+        requested_by_user_id,
+        status,
+        qb_hash,
+        save_path,
+        total_bytes,
+        downloaded_bytes,
+        progress,
+        download_speed,
+        eta_seconds,
+        error_message,
+        created_at,
+        updated_at,
+        completed_at,
+        last_accessed_at,
+        expires_at
+      ) VALUES (?, ?, 'queued', '', ?, 0, 0, 0, 0, NULL, '', ?, ?, NULL, ?, ?)
+      `,
+    ).run(input.torrentId, input.requestedByUserId, input.savePath, now, now, now, expiresAt);
+
+    const row = db.query("SELECT last_insert_rowid() AS id").get() as { id: number };
+    const job = db.query("SELECT * FROM offline_jobs WHERE id = ? LIMIT 1").get(row.id) as OfflineJobRow;
+
+    return { created: true, job };
+  });
+
+  return tx();
+}
+
+export function countOfflineDownloadingJobs() {
+  const row = db
+    .query("SELECT COUNT(1) AS count FROM offline_jobs WHERE status = 'downloading'")
+    .get() as { count: number };
+  return row.count;
+}
+
+export function listQueuedOfflineJobs(limit = 20) {
+  const rows = db
+    .query(
+      `
+      SELECT
+        j.*,
+        t.name AS torrent_name,
+        t.info_hash AS torrent_info_hash,
+        t.magnet_uri AS torrent_magnet_uri,
+        t.status AS torrent_status
+      FROM offline_jobs j
+      JOIN torrents t ON t.id = j.torrent_id
+      WHERE j.status = 'queued'
+      ORDER BY datetime(j.created_at) ASC, j.id ASC
+      LIMIT ?
+      `,
+    )
+    .all(limit);
+
+  return rows as Array<
+    OfflineJobRow & {
+      torrent_name: string;
+      torrent_info_hash: string | null;
+      torrent_magnet_uri: string | null;
+      torrent_status: TorrentStatus;
+    }
+  >;
+}
+
+export function listDownloadingOfflineJobs(limit = 200) {
+  const rows = db
+    .query(
+      `
+      SELECT
+        j.*,
+        t.name AS torrent_name,
+        t.info_hash AS torrent_info_hash,
+        t.magnet_uri AS torrent_magnet_uri,
+        t.status AS torrent_status
+      FROM offline_jobs j
+      JOIN torrents t ON t.id = j.torrent_id
+      WHERE j.status = 'downloading'
+      ORDER BY datetime(j.updated_at) ASC, j.id ASC
+      LIMIT ?
+      `,
+    )
+    .all(limit);
+
+  return rows as Array<
+    OfflineJobRow & {
+      torrent_name: string;
+      torrent_info_hash: string | null;
+      torrent_magnet_uri: string | null;
+      torrent_status: TorrentStatus;
+    }
+  >;
+}
+
+export function markOfflineJobDownloading(jobId: number, qbHash: string) {
+  const now = new Date().toISOString();
+  const result = db
+    .query(
+      "UPDATE offline_jobs SET status = 'downloading', qb_hash = ?, updated_at = ?, error_message = '' WHERE id = ? AND status = 'queued'",
+    )
+    .run(qbHash, now, jobId);
+  return result.changes > 0;
+}
+
+export function updateOfflineJobProgress(
+  jobId: number,
+  input: {
+    totalBytes: number;
+    downloadedBytes: number;
+    progress: number;
+    downloadSpeed: number;
+    etaSeconds: number | null;
+  },
+) {
+  const now = new Date().toISOString();
+  db.query(
+    "UPDATE offline_jobs SET total_bytes = ?, downloaded_bytes = ?, progress = ?, download_speed = ?, eta_seconds = ?, updated_at = ? WHERE id = ?",
+  ).run(
+    Math.max(0, Math.floor(input.totalBytes)),
+    Math.max(0, Math.floor(input.downloadedBytes)),
+    Math.max(0, Math.min(1, input.progress)),
+    Math.max(0, Math.floor(input.downloadSpeed)),
+    input.etaSeconds !== null ? Math.max(0, Math.floor(input.etaSeconds)) : null,
+    now,
+    jobId,
+  );
+}
+
+export function markOfflineJobCompleted(
+  jobId: number,
+  input: {
+    totalBytes: number;
+    downloadedBytes: number;
+    retentionDays: number;
+  },
+) {
+  const now = new Date().toISOString();
+  const expiresAt = addDaysIso(now, input.retentionDays);
+  db.query(
+    "UPDATE offline_jobs SET status = 'completed', total_bytes = ?, downloaded_bytes = ?, progress = 1, download_speed = 0, eta_seconds = 0, error_message = '', completed_at = ?, updated_at = ?, last_accessed_at = ?, expires_at = ? WHERE id = ?",
+  ).run(
+    Math.max(0, Math.floor(input.totalBytes)),
+    Math.max(0, Math.floor(input.downloadedBytes)),
+    now,
+    now,
+    now,
+    expiresAt,
+    jobId,
+  );
+}
+
+export function markOfflineJobFailed(jobId: number, message: string) {
+  const now = new Date().toISOString();
+  db.query(
+    "UPDATE offline_jobs SET status = 'failed', error_message = ?, download_speed = 0, eta_seconds = NULL, updated_at = ? WHERE id = ?",
+  ).run(message.slice(0, 300), now, jobId);
+}
+
+export function touchOfflineJobAccess(jobId: number, retentionDays: number) {
+  const now = new Date().toISOString();
+  const expiresAt = addDaysIso(now, retentionDays);
+  db.query("UPDATE offline_jobs SET last_accessed_at = ?, expires_at = ?, updated_at = ? WHERE id = ?").run(
+    now,
+    expiresAt,
+    now,
+    jobId,
+  );
+}
+
+export function getOfflineFileById(fileId: number) {
+  const row = db.query("SELECT * FROM offline_files WHERE id = ? LIMIT 1").get(fileId);
+  return (row as OfflineFileRow | null) ?? null;
+}
+
+export function getOfflineFileWithJob(fileId: number) {
+  expireOfflineJobsByNow();
+  const row = db
+    .query(
+      `
+      SELECT
+        f.*,
+        j.status AS job_status,
+        j.expires_at AS job_expires_at,
+        j.torrent_id AS job_torrent_id
+      FROM offline_files f
+      JOIN offline_jobs j ON j.id = f.job_id
+      WHERE f.id = ?
+      LIMIT 1
+      `,
+    )
+    .get(fileId);
+
+  return (
+    row as
+      | (OfflineFileRow & {
+          job_status: OfflineJobStatus;
+          job_expires_at: string | null;
+          job_torrent_id: number;
+        })
+      | null
+  );
+}
+
+export function replaceOfflineFiles(
+  jobId: number,
+  files: Array<{
+    torrentFileId: number | null;
+    relativePath: string;
+    sizeBytes: number;
+    mimeType: string;
+    isVideo: boolean;
+  }>,
+) {
+  const now = new Date().toISOString();
+
+  const tx = db.transaction(() => {
+    db.query("DELETE FROM offline_files WHERE job_id = ?").run(jobId);
+
+    const stmt = db.query(
+      "INSERT INTO offline_files (job_id, torrent_file_id, relative_path, size_bytes, mime_type, is_video, hls_status, hls_progress, hls_playlist_path, hls_error, created_at, updated_at, last_accessed_at) VALUES (?, ?, ?, ?, ?, ?, 'none', 0, '', '', ?, ?, ?)",
+    );
+
+    files.forEach((file) => {
+      stmt.run(
+        jobId,
+        file.torrentFileId,
+        file.relativePath,
+        Math.max(0, Math.floor(file.sizeBytes)),
+        file.mimeType,
+        file.isVideo ? 1 : 0,
+        now,
+        now,
+        now,
+      );
+    });
+  });
+
+  tx();
+}
+
+export function touchOfflineFileAccess(fileId: number) {
+  const now = new Date().toISOString();
+  db.query("UPDATE offline_files SET last_accessed_at = ?, updated_at = ? WHERE id = ?").run(now, now, fileId);
+}
+
+export function markOfflineFileHlsStatus(
+  fileId: number,
+  input: {
+    status: HlsStatus;
+    playlistPath?: string;
+    error?: string;
+  },
+) {
+  const now = new Date().toISOString();
+  const playlistPath = input.playlistPath ?? "";
+  const error = input.error ?? "";
+  db.query(
+    "UPDATE offline_files SET hls_status = ?, hls_playlist_path = ?, hls_error = ?, updated_at = ? WHERE id = ?",
+  ).run(input.status, playlistPath, error.slice(0, 300), now, fileId);
+}
+
+export function updateOfflineFileHlsProgress(fileId: number, progress: number) {
+  const now = new Date().toISOString();
+  db.query("UPDATE offline_files SET hls_progress = ?, updated_at = ? WHERE id = ?").run(
+    Math.max(0, Math.min(1, progress)),
+    now,
+    fileId,
+  );
+}
+
+export function listPendingHlsOfflineFiles(limit = 10) {
+  const rows = db
+    .query(
+      `
+      SELECT
+        f.*,
+        j.status AS job_status,
+        j.expires_at AS job_expires_at
+      FROM offline_files f
+      JOIN offline_jobs j ON j.id = f.job_id
+      WHERE f.hls_status = 'pending'
+        AND f.is_video = 1
+        AND j.status = 'completed'
+      ORDER BY datetime(f.updated_at) ASC, f.id ASC
+      LIMIT ?
+      `,
+    )
+    .all(limit);
+
+  return rows as Array<
+    OfflineFileRow & {
+      job_status: OfflineJobStatus;
+      job_expires_at: string | null;
+    }
+  >;
+}
+
+export function listExpiredOfflineJobs(nowIso: string) {
+  const rows = db
+    .query(
+      `
+      SELECT *
+      FROM offline_jobs
+      WHERE status IN ('completed', 'expired')
+        AND expires_at IS NOT NULL
+        AND expires_at <= ?
+      ORDER BY datetime(expires_at) ASC, id ASC
+      `,
+    )
+    .all(nowIso);
+
+  return rows as OfflineJobRow[];
+}
+
+export function markOfflineJobExpired(jobId: number) {
+  const now = new Date().toISOString();
+  db.query(
+    "UPDATE offline_jobs SET status = 'expired', updated_at = ?, download_speed = 0, eta_seconds = NULL WHERE id = ?",
+  ).run(now, jobId);
 }
 
 export function insertTorrent(input: InsertTorrentInput) {
