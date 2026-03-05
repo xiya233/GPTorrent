@@ -247,6 +247,7 @@ table {
 }
 
 .torrent-list-table,
+.admin-users-table,
 .my-torrents-table,
 .admin-torrents-table,
 .my-offline-table,
@@ -262,6 +263,83 @@ table {
 .my-torrents-table th:nth-child(2),
 .my-torrents-table td:nth-child(2) {
   width: 48%;
+}
+
+.my-torrents-table .col-id {
+  width: 72px;
+  white-space: nowrap;
+}
+
+.my-torrents-table .col-status {
+  width: 132px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.my-torrents-table .col-category {
+  width: 96px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.my-torrents-table .col-actions {
+  width: 192px;
+  white-space: nowrap;
+}
+
+.admin-users-table .col-id {
+  width: 64px;
+  white-space: nowrap;
+}
+
+.admin-users-table {
+  table-layout: auto;
+}
+
+.admin-users-table .col-username {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.admin-users-table .col-role {
+  width: 88px;
+  white-space: nowrap;
+}
+
+.admin-users-table .col-status {
+  width: 96px;
+  white-space: nowrap;
+}
+
+.admin-users-table .col-quota {
+  width: 108px;
+  white-space: nowrap;
+}
+
+.admin-users-table .col-created {
+  width: 148px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-users-table .col-actions {
+  width: 92px;
+  white-space: nowrap;
+  position: relative;
+}
+
+.admin-users-table .quota-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 30px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .admin-torrents-table th:nth-child(2),
@@ -1155,6 +1233,14 @@ tbody tr:last-child td {
     min-width: 1140px;
   }
 
+  .admin-users-table {
+    min-width: 920px;
+  }
+
+  .my-torrents-table {
+    min-width: 820px;
+  }
+
   .my-offline-table {
     min-width: 1040px;
   }
@@ -1357,6 +1443,8 @@ tbody tr:last-child td {
   color: #ef4444;
   background: color-mix(in srgb, #ef4444 8%, transparent);
   cursor: pointer;
+  white-space: nowrap;
+  line-height: 1;
 }
 
 .table-action-btn {
@@ -1369,6 +1457,88 @@ tbody tr:last-child td {
   white-space: nowrap;
   line-height: 1;
   font-size: 0.8rem;
+}
+
+.fixed-action-btn {
+  width: 80px;
+  min-width: 80px;
+  max-width: 80px;
+  min-height: 30px;
+}
+
+.admin-users-table .fixed-action-btn {
+  min-width: 80px;
+}
+
+.user-row-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.user-row-menu > summary {
+  list-style: none;
+}
+
+.user-row-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.user-row-menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  min-width: 98px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  padding: 6px;
+  display: grid;
+  gap: 4px;
+}
+
+.user-row-menu-dropdown form {
+  margin: 0;
+}
+
+.user-row-menu-quota-form {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
+}
+
+.user-row-menu-quota-form input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  color: var(--text-primary);
+  padding: 6px 8px;
+  font-size: 0.78rem;
+}
+
+.user-row-menu-item {
+  width: 100%;
+  min-height: 30px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.user-row-menu-item:hover {
+  background: color-mix(in srgb, var(--text-primary) 7%, transparent);
+}
+
+.user-row-menu-item.is-danger {
+  color: #ef4444;
 }
 
 .full-width {

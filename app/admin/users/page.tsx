@@ -53,16 +53,16 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
           </form>
 
           <div className="table-wrap">
-            <table>
+            <table className="admin-users-table">
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>用户名</th>
-                  <th>角色</th>
-                  <th>状态</th>
-                  <th>离线配额</th>
-                  <th>创建时间</th>
-                  <th className="align-right">操作</th>
+                  <th className="col-id">ID</th>
+                  <th className="col-username">用户名</th>
+                  <th className="col-role">角色</th>
+                  <th className="col-status">状态</th>
+                  <th className="col-quota">离线配额</th>
+                  <th className="col-created">创建时间</th>
+                  <th className="align-right col-actions">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -82,45 +82,51 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
 
                     return (
                       <tr key={user.id}>
-                        <td>{user.id}</td>
-                        <td>{user.username}</td>
-                        <td>{user.role}</td>
-                        <td>{user.status}</td>
-                        <td>
-                          <form action={updateQuotaAction} className="admin-inline-form">
-                            <input defaultValue={quotaGb} min={1} name="offlineQuotaGb" type="number" />
-                            <button className="secondary-btn tiny-btn" type="submit">
-                              保存
-                            </button>
-                          </form>
+                        <td className="col-id">{user.id}</td>
+                        <td className="col-username" title={user.username}>
+                          {user.username}
                         </td>
-                        <td className="muted">{new Date(user.created_at).toLocaleString("zh-CN")}</td>
-                        <td className="align-right">
-                          <div className="admin-actions">
-                            {user.status === "active" ? (
-                              <form action={banAction}>
-                                <button className="secondary-btn tiny-btn" type="submit">
-                                  封禁
+                        <td className="col-role">{user.role}</td>
+                        <td className="col-status">{user.status}</td>
+                        <td className="col-quota">
+                          <span className="quota-value">{quotaGb} GiB</span>
+                        </td>
+                        <td className="muted col-created">{new Date(user.created_at).toLocaleString("zh-CN")}</td>
+                        <td className="align-right col-actions">
+                          <details className="user-row-menu">
+                            <summary className="secondary-btn tiny-btn table-action-btn fixed-action-btn">操作</summary>
+                            <div className="user-row-menu-dropdown">
+                              <form action={updateQuotaAction} className="user-row-menu-quota-form">
+                                <input defaultValue={quotaGb} min={1} name="offlineQuotaGb" title="离线配额(GB)" type="number" />
+                                <button className="user-row-menu-item" type="submit">
+                                  保存配额
                                 </button>
                               </form>
-                            ) : null}
+                              {user.status === "active" ? (
+                                <form action={banAction}>
+                                  <button className="user-row-menu-item" type="submit">
+                                    封禁
+                                  </button>
+                                </form>
+                              ) : null}
 
-                            {user.status === "banned" ? (
-                              <form action={unbanAction}>
-                                <button className="secondary-btn tiny-btn" type="submit">
-                                  解封
-                                </button>
-                              </form>
-                            ) : null}
+                              {user.status === "banned" ? (
+                                <form action={unbanAction}>
+                                  <button className="user-row-menu-item" type="submit">
+                                    解封
+                                  </button>
+                                </form>
+                              ) : null}
 
-                            {user.status !== "deleted" ? (
-                              <form action={deleteAction}>
-                                <button className="danger-btn tiny-btn" type="submit">
-                                  删除
-                                </button>
-                              </form>
-                            ) : null}
-                          </div>
+                              {user.status !== "deleted" ? (
+                                <form action={deleteAction}>
+                                  <button className="user-row-menu-item is-danger" type="submit">
+                                    删除
+                                  </button>
+                                </form>
+                              ) : null}
+                            </div>
+                          </details>
                         </td>
                       </tr>
                     );

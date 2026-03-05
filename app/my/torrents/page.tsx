@@ -18,11 +18,11 @@ export default async function MyTorrentsPage() {
           <table className="my-torrents-table">
             <thead>
               <tr>
-                <th>ID</th>
+                <th className="col-id">ID</th>
                 <th>标题</th>
-                <th>状态</th>
-                <th>分类</th>
-                <th className="align-right">操作</th>
+                <th className="col-status">状态</th>
+                <th className="col-category">分类</th>
+                <th className="align-right col-actions">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -35,25 +35,28 @@ export default async function MyTorrentsPage() {
               ) : (
                 torrents.map((torrent) => (
                   <tr key={torrent.id}>
-                    <td>{torrent.id}</td>
+                    <td className="col-id">{torrent.id}</td>
                     <td className="torrent-title-cell">
                       <Link className="torrent-title-link" href={`/torrent/${torrent.id}`} title={torrent.name}>
                         {torrent.name}
                       </Link>
                     </td>
-                    <td>{torrent.status}</td>
-                    <td>{torrent.category}</td>
-                    <td className="align-right">
+                    <td className="col-status">{torrent.status}</td>
+                    <td className="col-category">{torrent.category}</td>
+                    <td className="align-right col-actions">
                       <div className="admin-actions">
                         {torrent.status === "active" ? (
-                          <Link className="secondary-btn tiny-btn" href={`/my/torrents/${torrent.id}/edit`}>
+                          <Link
+                            className="secondary-btn tiny-btn table-action-btn fixed-action-btn"
+                            href={`/my/torrents/${torrent.id}/edit`}
+                          >
                             编辑
                           </Link>
                         ) : null}
                         {torrent.status === "active" && flags.allowUserDeleteTorrent ? (
                           <form action={`/api/torrents/${torrent.id}/delete`} method="POST">
                             <input name="redirectTo" type="hidden" value="/my/torrents" />
-                            <button className="danger-btn tiny-btn" type="submit">
+                            <button className="danger-btn tiny-btn table-action-btn fixed-action-btn" type="submit">
                               删除
                             </button>
                           </form>
