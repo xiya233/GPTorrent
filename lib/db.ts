@@ -768,7 +768,6 @@ function backfillOfflineUserJobs() {
         FROM offline_user_jobs uj
         WHERE uj.user_id = r.requested_by_user_id
           AND uj.torrent_id = r.torrent_id
-          AND uj.status = 'active'
       )
     `,
   ).run(now, now, now);
