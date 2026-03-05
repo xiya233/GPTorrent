@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME, getUserStateFromToken } from "@/lib/auth";
 import {
+  getFailedOfflineUserJobByTorrentId,
   getActiveOfflineUserJobByTorrentId,
   getOfflineJobById,
   getTorrentById,
@@ -31,6 +32,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   if (!torrent.magnet_uri || !torrent.info_hash) {
     return NextResponse.json({ error: "当前种子缺少磁力信息，无法创建离线任务" }, { status: 400 });
+  }
+
+  const failedMap = getFailedOfflineUserJobByTorrentId(user.id, torrentId);
+  if (failedMap) {
+    return NextResponse.json(
+      {
+        code: "FAILED_EXISTS",
+        error: "离线任务已添加，但状态failed，请尝试在任务列表重新下载。",
+        userJobId: failedMap.user_job_id,
+      },
+      { status: 409 },
+    );
   }
 
   const savePath = `offline/raw/torrent-${torrentId}-${Date.now()}-${randomUUID()}`;
@@ -71,6 +84,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   } catch (error) {
     const maybeSqlite = error as { code?: string; message?: string };
     if (maybeSqlite.code === "SQLITE_CONSTRAINT_UNIQUE") {
+      const failed = getFailedOfflineUserJobByTorrentId(user.id, torrentId);
+      if (failed) {
+        return NextResponse.json(
+          {
+            code: "FAILED_EXISTS",
+            error: "离线任务已添加，但状态failed，请尝试在任务列表重新下载。",
+            userJobId: failed.user_job_id,
+          },
+          { status: 409 },
+        );
+      }
       const activeMap = getActiveOfflineUserJobByTorrentId(user.id, torrentId);
       if (activeMap) {
         const activeJob = getOfflineJobById(activeMap.job_id);

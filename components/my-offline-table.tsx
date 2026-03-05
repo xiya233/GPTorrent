@@ -33,6 +33,7 @@ type MyOfflineJobRow = {
   download_speed: number;
   eta_seconds: number | null;
   error_message: string;
+  last_error_source: "queued" | "downloading" | "cancel" | "";
   job_created_at: string;
   job_updated_at: string;
   completed_at: string | null;
@@ -79,6 +80,7 @@ export function MyOfflineTable({ initialItems, initialQuota, initialQ, initialSt
   const [items, setItems] = useState(initialItems);
   const [quota, setQuota] = useState(initialQuota);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [retryingId, setRetryingId] = useState<number | null>(null);
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -143,6 +145,35 @@ export function MyOfflineTable({ initialItems, initialQuota, initialQ, initialSt
       setError(err instanceof Error ? err.message : "移除任务失败");
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function retryJob(userJobId: number) {
+    setOpenMenuId(null);
+    setRetryingId(userJobId);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch(`/api/my/offline/${userJobId}/retry`, {
+        method: "POST",
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        quota?: OfflineQuotaSnapshot;
+        quotaUsedBytes?: number;
+        quotaLimitBytes?: number;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error || "重试离线任务失败");
+      }
+
+      await refreshList();
+      setNotice("任务已重新加入离线队列，请稍后刷新状态。");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "重试离线任务失败");
+    } finally {
+      setRetryingId(null);
     }
   }
 
@@ -228,12 +259,16 @@ export function MyOfflineTable({ initialItems, initialQuota, initialQ, initialSt
                         <OfflineRowActionMenu
                           canDownload={item.job_status === "completed" && Boolean(firstFile)}
                           canPlay={item.job_status === "completed" && Boolean(firstVideo)}
+                          canRetry={item.job_status === "failed"}
                           downloadHref={firstFile ? `/offline/files/${firstFile.id}/download` : "#"}
                           onClose={() => setOpenMenuId(null)}
                           onRemove={() => removeJob(item.user_job_id)}
+                          onRetry={() => retryJob(item.user_job_id)}
                           onToggle={() => setOpenMenuId((prev) => (prev === item.user_job_id ? null : item.user_job_id))}
                           open={openMenuId === item.user_job_id}
                           playHref={firstVideo ? `/offline/play/${firstVideo.id}` : "#"}
+                          retryDisabled={retryingId === item.user_job_id || busyId === item.user_job_id}
+                          retryLabel={retryingId === item.user_job_id ? "重试中..." : "重试"}
                           removeDisabled={busyId === item.user_job_id}
                           removeLabel={busyId === item.user_job_id ? "移除中..." : "移除任务"}
                           rowId={item.user_job_id}

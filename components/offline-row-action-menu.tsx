@@ -13,6 +13,10 @@ type OfflineRowActionMenuProps = {
   downloadHref: string;
   canPlay: boolean;
   playHref: string;
+  canRetry: boolean;
+  retryDisabled: boolean;
+  retryLabel: string;
+  onRetry: () => void;
   removeDisabled: boolean;
   removeLabel: string;
   onRemove: () => void;
@@ -27,6 +31,10 @@ export function OfflineRowActionMenu({
   downloadHref,
   canPlay,
   playHref,
+  canRetry,
+  retryDisabled,
+  retryLabel,
+  onRetry,
   removeDisabled,
   removeLabel,
   onRemove,
@@ -51,7 +59,7 @@ export function OfflineRowActionMenu({
       }
       const rect = triggerRef.current.getBoundingClientRect();
       const menuWidth = Math.max(rect.width, 136);
-      const estimatedHeight = 122;
+      const estimatedHeight = menuRef.current?.getBoundingClientRect().height || 168;
       const gap = 6;
 
       let top = rect.bottom + gap;
@@ -68,14 +76,15 @@ export function OfflineRowActionMenu({
       setMenuPos({ top, left, width: menuWidth });
     };
 
-    updatePos();
+    const frame = requestAnimationFrame(updatePos);
     window.addEventListener("resize", updatePos);
     window.addEventListener("scroll", updatePos, true);
     return () => {
+      cancelAnimationFrame(frame);
       window.removeEventListener("resize", updatePos);
       window.removeEventListener("scroll", updatePos, true);
     };
-  }, [open]);
+  }, [open, canDownload, canPlay, canRetry]);
 
   useEffect(() => {
     if (!open) {
@@ -159,6 +168,20 @@ export function OfflineRowActionMenu({
                 播放
               </button>
             )}
+
+            {canRetry ? (
+              <button
+                className="row-action-menu-item"
+                disabled={retryDisabled}
+                onClick={() => {
+                  onClose();
+                  onRetry();
+                }}
+                type="button"
+              >
+                {retryLabel}
+              </button>
+            ) : null}
 
             <button
               className="row-action-menu-item is-danger"

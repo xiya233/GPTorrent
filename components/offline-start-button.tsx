@@ -29,8 +29,17 @@ export function OfflineStartButton({ torrentId, isLoggedIn }: OfflineStartButton
       const response = await fetch(`/api/torrents/${torrentId}/offline/start`, {
         method: "POST",
       });
-      const payload = (await response.json()) as { error?: string };
+      const payload = (await response.json()) as { code?: string; error?: string };
       if (!response.ok) {
+        if (response.status === 409 && payload.code === "FAILED_EXISTS") {
+          const confirmed = window.confirm(
+            payload.error || "离线任务已添加，但状态failed，请尝试在任务列表重新下载。",
+          );
+          if (confirmed) {
+            router.push("/my/offline");
+          }
+          return;
+        }
         throw new Error(payload.error || "创建离线任务失败");
       }
       router.push("/my/offline");

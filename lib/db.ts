@@ -1138,6 +1138,38 @@ export function getActiveOfflineUserJobByTorrentId(userId: number, torrentId: nu
   );
 }
 
+export function getFailedOfflineUserJobByTorrentId(userId: number, torrentId: number) {
+  expireOfflineJobsByNow();
+  const row = db
+    .query(
+      `
+      SELECT
+        uj.id AS user_job_id,
+        uj.job_id AS job_id,
+        j.status AS job_status
+      FROM offline_user_jobs uj
+      JOIN offline_jobs j ON j.id = uj.job_id
+      WHERE uj.user_id = ?
+        AND uj.torrent_id = ?
+        AND uj.status = 'active'
+        AND j.status = 'failed'
+      ORDER BY uj.id DESC
+      LIMIT 1
+      `,
+    )
+    .get(userId, torrentId);
+
+  return (
+    row as
+      | {
+          user_job_id: number;
+          job_id: number;
+          job_status: OfflineJobStatus;
+        }
+      | null
+  );
+}
+
 export function hasActiveOfflineJobAccess(userId: number, jobId: number) {
   const row = db
     .query("SELECT id FROM offline_user_jobs WHERE user_id = ? AND job_id = ? AND status = 'active' LIMIT 1")
@@ -1515,6 +1547,149 @@ export function removeOfflineUserJob(userId: number, userJobId: number) {
       shouldStopGlobalJob: false,
       jobStatus: row.job_status,
       qbHash: (row.job_qb_hash || "").trim().toLowerCase(),
+    };
+  });
+
+  return tx();
+}
+
+export function retryOfflineUserJobForUser(input: {
+  userId: number;
+  userJobId: number;
+  retentionDays: number;
+  savePath: string;
+  estimatedBytes: number;
+}) {
+  const now = new Date().toISOString();
+  expireOfflineJobsByNow(now);
+
+  const tx = db.transaction(() => {
+    const row = db
+      .query(
+        `
+        SELECT
+          uj.*,
+          j.status AS job_status
+        FROM offline_user_jobs uj
+        JOIN offline_jobs j ON j.id = uj.job_id
+        WHERE uj.user_id = ?
+          AND uj.id = ?
+          AND uj.status = 'active'
+          AND j.status != 'expired'
+        LIMIT 1
+        `,
+      )
+      .get(input.userId, input.userJobId) as (OfflineUserJobRow & { job_status: OfflineJobStatus }) | null;
+
+    if (!row) {
+      return { ok: false as const, reason: "not_found" as const };
+    }
+
+    if (row.job_status !== "failed") {
+      return { ok: false as const, reason: "invalid_status" as const, jobStatus: row.job_status };
+    }
+
+    const quota = getOfflineQuotaSnapshot(input.userId);
+    const activeGlobalJob = db
+      .query(
+        "SELECT * FROM offline_jobs WHERE torrent_id = ? AND status IN ('queued', 'downloading', 'completed') ORDER BY id DESC LIMIT 1",
+      )
+      .get(row.torrent_id) as OfflineJobRow | null;
+
+    const torrentSizeRow = db
+      .query("SELECT size_bytes FROM torrents WHERE id = ? LIMIT 1")
+      .get(row.torrent_id) as { size_bytes: number } | null;
+    const fallbackEstimatedBytes = Math.max(0, Number(torrentSizeRow?.size_bytes ?? 0), input.estimatedBytes);
+
+    let reservedBytes = normalizeBytes(fallbackEstimatedBytes);
+    let reserveSource: "total_bytes" | "files_sum" | "torrent_size" = "torrent_size";
+
+    if (activeGlobalJob && normalizeBytes(activeGlobalJob.total_bytes) > 0) {
+      reservedBytes = normalizeBytes(activeGlobalJob.total_bytes);
+      reserveSource = "total_bytes";
+    } else if (activeGlobalJob && activeGlobalJob.status === "completed") {
+      const sizeRow = db
+        .query("SELECT COALESCE(SUM(size_bytes), 0) AS sum_bytes FROM offline_files WHERE job_id = ?")
+        .get(activeGlobalJob.id) as { sum_bytes: number };
+      if (normalizeBytes(sizeRow.sum_bytes) > 0) {
+        reservedBytes = normalizeBytes(sizeRow.sum_bytes);
+        reserveSource = "files_sum";
+      }
+    }
+
+    if (quota.usedBytes + reservedBytes > quota.limitBytes) {
+      return {
+        ok: false as const,
+        reason: "quota_exceeded" as const,
+        quotaUsedBytes: quota.usedBytes,
+        quotaLimitBytes: quota.limitBytes,
+        reservedBytes,
+        reserveSource,
+      };
+    }
+
+    let job = activeGlobalJob;
+    let createdJob = false;
+
+    if (!job) {
+      const expiresAt = addDaysIso(now, input.retentionDays);
+      db.query(
+        `
+        INSERT INTO offline_jobs (
+          torrent_id,
+          requested_by_user_id,
+          status,
+          qb_hash,
+          save_path,
+          total_bytes,
+          downloaded_bytes,
+          progress,
+          download_speed,
+          eta_seconds,
+          error_message,
+          created_at,
+          updated_at,
+          completed_at,
+          last_accessed_at,
+          expires_at
+        ) VALUES (?, ?, 'queued', '', ?, 0, 0, 0, 0, NULL, '', ?, ?, NULL, ?, ?)
+        `,
+      ).run(row.torrent_id, input.userId, input.savePath, now, now, now, expiresAt);
+
+      const inserted = db.query("SELECT last_insert_rowid() AS id").get() as { id: number };
+      job = db.query("SELECT * FROM offline_jobs WHERE id = ? LIMIT 1").get(inserted.id) as OfflineJobRow | null;
+      createdJob = true;
+    }
+
+    if (!job) {
+      throw new Error("重试离线任务失败");
+    }
+
+    db.query(
+      `
+      UPDATE offline_user_jobs
+      SET job_id = ?,
+          reserved_bytes = ?,
+          billed_bytes = 0,
+          updated_at = ?,
+          last_accessed_at = ?
+      WHERE id = ?
+      `,
+    ).run(job.id, reservedBytes, now, now, row.id);
+
+    const userJob = db.query("SELECT * FROM offline_user_jobs WHERE id = ? LIMIT 1").get(row.id) as OfflineUserJobRow;
+    const latestQuota = getOfflineQuotaSnapshot(input.userId);
+
+    return {
+      ok: true as const,
+      createdJob,
+      reusedGlobalJob: !createdJob,
+      job,
+      userJob,
+      quotaUsedBytes: latestQuota.usedBytes,
+      quotaLimitBytes: latestQuota.limitBytes,
+      reservedBytes,
+      reserveSource,
     };
   });
 
