@@ -26,6 +26,7 @@ export default async function AdminSitePage() {
           allowGuestTorrentImageUpload={settings.allowGuestTorrentImageUpload}
           allowUserRegister={settings.allowUserRegister}
           allowUserDeleteTorrent={settings.allowUserDeleteTorrent}
+          descriptionText={branding.descriptionText}
           enableLoginCaptcha={settings.enableLoginCaptcha}
           enableRegisterCaptcha={settings.enableRegisterCaptcha}
           guestTorrentFileMaxMb={settings.guestTorrentFileMaxMb}

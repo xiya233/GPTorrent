@@ -8,6 +8,7 @@ import {
 
 type SiteFormProps = {
   titleText: string;
+  descriptionText: string;
   allowGuestUpload: boolean;
   allowUserDeleteTorrent: boolean;
   allowUserRegister: boolean;
@@ -22,6 +23,7 @@ type SiteFormProps = {
 
 export function SiteForm({
   titleText,
+  descriptionText,
   allowGuestUpload,
   allowUserDeleteTorrent,
   allowUserRegister,
@@ -50,6 +52,18 @@ export function SiteForm({
       <div className="field-group">
         <label htmlFor="titleText">标题文字</label>
         <input defaultValue={titleText} id="titleText" maxLength={60} name="titleText" required type="text" />
+      </div>
+
+      <div className="field-group">
+        <label htmlFor="descriptionText">网站描述（SEO）</label>
+        <textarea
+          defaultValue={descriptionText}
+          id="descriptionText"
+          maxLength={160}
+          name="descriptionText"
+          placeholder="用于页面 metadata.description，可留空使用默认描述"
+          rows={3}
+        />
       </div>
 
       <div className="field-group">

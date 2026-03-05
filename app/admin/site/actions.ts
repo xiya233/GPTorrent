@@ -28,6 +28,7 @@ export async function adminUpdateSiteBrandingAction(
   await requireAdminUser();
 
   const titleText = ((formData.get("titleText") as string | null) ?? "").trim();
+  const descriptionText = ((formData.get("descriptionText") as string | null) ?? "").trim();
   const logoFile = formData.get("logoFile");
   const allowGuestUpload = formData.get("allowGuestUpload") === "on";
   const allowUserDeleteTorrent = formData.get("allowUserDeleteTorrent") === "on";
@@ -42,6 +43,9 @@ export async function adminUpdateSiteBrandingAction(
 
   if (!titleText || titleText.length > 60) {
     return { error: "标题长度需在 1-60 字符之间", success: null };
+  }
+  if (descriptionText.length > 160) {
+    return { error: "网站描述最多 160 字符", success: null };
   }
 
   let logoPath: string | undefined;
@@ -67,6 +71,7 @@ export async function adminUpdateSiteBrandingAction(
 
   updateSiteSettings({
     titleText,
+    descriptionText,
     logoPath,
     allowGuestUpload,
     allowUserDeleteTorrent,

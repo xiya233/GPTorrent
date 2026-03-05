@@ -11,6 +11,7 @@ const inter = Inter({
 });
 
 export const dynamic = "force-dynamic";
+const DEFAULT_SITE_DESCRIPTION = "基于 Next.js App Router + Server Actions + SQLite 的 BT 种子分享网站";
 
 const themeScript = `
 (function() {
@@ -28,7 +29,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const branding = getSiteBranding();
   return {
     title: branding.titleText,
-    description: "基于 Next.js App Router + Server Actions + SQLite 的 BT 种子分享网站",
+    description: branding.descriptionText || DEFAULT_SITE_DESCRIPTION,
   };
 }
 
