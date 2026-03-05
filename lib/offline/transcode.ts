@@ -103,9 +103,38 @@ function run(bin: string, args: string[], options: RunOptions = {}) {
         resolve({ stdout, stderr });
         return;
       }
-      reject(new Error(stderr || `${bin} exited with code ${code ?? -1}`));
+      const summarized = summarizeCommandError(stderr, bin, code ?? -1);
+      reject(new Error(summarized));
     });
   });
+}
+
+function summarizeCommandError(stderr: string, bin: string, code: number) {
+  const lines = stderr
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) {
+    return `${bin} exited with code ${code}`;
+  }
+
+  const noisePrefixes = [
+    /^ffmpeg version/i,
+    /^built with/i,
+    /^configuration:/i,
+    /^libav/i,
+    /^Input #/i,
+    /^Stream mapping:/i,
+    /^Press \[q\]/i,
+  ];
+
+  const useful = lines.filter((line) => !noisePrefixes.some((re) => re.test(line)));
+  const fallback = useful.length > 0 ? useful : lines;
+
+  const key = fallback.filter((line) => /error|failed|invalid|unable|cannot|not support/i.test(line));
+  const picked = (key.length > 0 ? key : fallback).slice(-4);
+  return picked.join(" | ").slice(0, 600);
 }
 
 export async function probeVideo(input: { ffprobeBin: string; sourceAbs: string }) {
@@ -384,6 +413,8 @@ export async function transcodeToHls(input: {
       "veryfast",
       `-profile:v:${index}`,
       "main",
+      `-pix_fmt:v:${index}`,
+      "yuv420p",
       `-b:v:${index}`,
       `${variant.bitrateK}k`,
       `-maxrate:v:${index}`,
