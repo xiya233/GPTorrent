@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useMemo, useState } from "react";
+import { MAX_TAG_COUNT, MAX_TAG_LENGTH, getFirstTagExceedingLength, parseTagsInput } from "@/lib/tags";
 
 type EditTorrentFormProps = {
   actionUrl: string;
@@ -27,6 +28,7 @@ export function EditTorrentForm({
 }: EditTorrentFormProps) {
   const [removeIds, setRemoveIds] = useState<number[]>([]);
   const [newImages, setNewImages] = useState<File[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const visibleImages = useMemo(
     () => images.filter((img) => !removeIds.includes(img.id)),
@@ -35,8 +37,21 @@ export function EditTorrentForm({
 
   const remainSlots = Math.max(MAX_IMAGE_COUNT - visibleImages.length, 0);
 
+  const onSubmit: React.FormEventHandler<HTMLFormElement> = (event) => {
+    const formData = new FormData(event.currentTarget);
+    const tagsRaw = String(formData.get("tags") ?? "");
+    const parsedTags = parseTagsInput(tagsRaw);
+    const exceededTag = getFirstTagExceedingLength(parsedTags);
+    if (exceededTag) {
+      event.preventDefault();
+      setError(`标签“${exceededTag}”超过 ${MAX_TAG_LENGTH} 字符，请缩短`);
+      return;
+    }
+    setError(null);
+  };
+
   return (
-    <form action={actionUrl} className="card upload-form" encType="multipart/form-data" method="POST">
+    <form action={actionUrl} className="card upload-form" encType="multipart/form-data" method="POST" onSubmit={onSubmit}>
       <div className="field-grid">
         <div className="field-group span-2">
           <label htmlFor="name">标题</label>
@@ -45,7 +60,13 @@ export function EditTorrentForm({
 
         <div className="field-group span-2">
           <label htmlFor="tags">标签</label>
-          <input defaultValue={tags} id="tags" name="tags" type="text" />
+          <input
+            defaultValue={tags}
+            id="tags"
+            name="tags"
+            placeholder={`最多 ${MAX_TAG_COUNT} 个标签，单个标签不超过 ${MAX_TAG_LENGTH} 个字符。`}
+            type="text"
+          />
         </div>
 
         <div className="field-group span-2">
@@ -105,6 +126,8 @@ export function EditTorrentForm({
           ) : null}
         </div>
       </div>
+
+      {error ? <p className="form-error">{error}</p> : null}
 
       <div className="form-actions">
         <button className="primary-btn" type="submit">

@@ -2,6 +2,7 @@
 import { useRef, useState } from "react";
 import { ImagePlus, Upload, X } from "lucide-react";
 import { TORRENT_CATEGORIES } from "@/lib/categories";
+import { MAX_TAG_COUNT, MAX_TAG_LENGTH, getFirstTagExceedingLength, parseTagsInput } from "@/lib/tags";
 
 type UploadFormProps = {
   isLoggedIn: boolean;
@@ -184,6 +185,14 @@ export function UploadForm({
     }
 
     const formData = new FormData(form);
+    const tagsRaw = String(formData.get("tags") ?? "");
+    const parsedTags = parseTagsInput(tagsRaw);
+    const exceededTag = getFirstTagExceedingLength(parsedTags);
+    if (exceededTag) {
+      setError(`标签“${exceededTag}”超过 ${MAX_TAG_LENGTH} 字符，请缩短`);
+      return;
+    }
+
     const xhr = new XMLHttpRequest();
     const startedAt = performance.now();
 
@@ -341,7 +350,13 @@ export function UploadForm({
 
         <div className="field-group">
           <label htmlFor="tags">标签 (逗号分隔)</label>
-          <input disabled={uploading || guestDisabled} id="tags" name="tags" placeholder="1080p, HEVC, FLAC" type="text" />
+          <input
+            disabled={uploading || guestDisabled}
+            id="tags"
+            name="tags"
+            placeholder={`最多 ${MAX_TAG_COUNT} 个标签，单个标签不超过 ${MAX_TAG_LENGTH} 个字符。`}
+            type="text"
+          />
         </div>
 
         <div className="field-group span-2">

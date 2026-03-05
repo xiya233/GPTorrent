@@ -10,6 +10,7 @@ import {
   updateTorrentByOwner,
 } from "@/lib/db";
 import { saveUploadedImageAsWebp } from "@/lib/image-upload";
+import { parseTagsInput, validateTags } from "@/lib/tags";
 
 const MAX_IMAGE_COUNT = 9;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/svg+xml"]);
@@ -57,11 +58,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: "描述不能为空" }, { status: 400 });
   }
 
-  const tags = tagsRaw
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, 12);
+  const tags = parseTagsInput(tagsRaw);
+  const tagError = validateTags(tags);
+  if (tagError) {
+    return NextResponse.json({ error: tagError }, { status: 400 });
+  }
 
   const removeImageIds = removeImageIdsRaw
     ? removeImageIdsRaw

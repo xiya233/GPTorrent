@@ -5,6 +5,7 @@ import { SESSION_COOKIE_NAME, getUserStateFromToken } from "@/lib/auth";
 import { isValidTorrentCategory } from "@/lib/categories";
 import { createTorrentWithMeta, getActiveTorrentByInfoHash, getSiteFeatureFlags, getUploadPolicy } from "@/lib/db";
 import { saveUploadedImageAsWebp } from "@/lib/image-upload";
+import { parseTagsInput, validateTags } from "@/lib/tags";
 import { parseTorrentMeta } from "@/lib/torrent";
 import { formatBytes, saveUploadedFile } from "@/lib/storage";
 
@@ -33,14 +34,6 @@ async function removeSavedRelativePath(relativePath: string) {
   } catch {
     // ignore cleanup errors
   }
-}
-
-function normalizeTags(input: string) {
-  return input
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, 12);
 }
 
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/svg+xml"]);
@@ -81,6 +74,11 @@ export async function POST(request: NextRequest) {
   }
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "请上传 .torrent 文件" }, { status: 400 });
+  }
+  const tags = parseTagsInput(tagsRaw);
+  const tagError = validateTags(tags);
+  if (tagError) {
+    return NextResponse.json({ error: tagError }, { status: 400 });
   }
 
   let meta;
@@ -148,7 +146,7 @@ export async function POST(request: NextRequest) {
       category,
       sizeBytes: file.size,
       sizeDisplay: formatBytes(file.size),
-      tags: normalizeTags(tagsRaw),
+      tags,
       description,
       uploaderName: user ? user.username : "访客",
       uploaderUserId: user?.id ?? null,
