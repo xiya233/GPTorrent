@@ -248,7 +248,10 @@ table {
 
 .torrent-list-table,
 .my-torrents-table,
-.admin-torrents-table {
+.admin-torrents-table,
+.my-offline-table,
+.admin-offline-table,
+.admin-torrent-manage-table {
   table-layout: fixed;
 }
 
@@ -264,6 +267,175 @@ table {
 .admin-torrents-table th:nth-child(2),
 .admin-torrents-table td:nth-child(2) {
   width: 40%;
+}
+
+.my-offline-table th,
+.my-offline-table td,
+.admin-offline-table th,
+.admin-offline-table td,
+.admin-torrent-manage-table th,
+.admin-torrent-manage-table td {
+  line-height: 1.35;
+}
+
+.my-offline-table th,
+.admin-offline-table th,
+.admin-torrent-manage-table th {
+  white-space: nowrap;
+}
+
+.my-offline-table .col-id {
+  width: 68px;
+  white-space: nowrap;
+}
+
+.my-offline-table .col-status {
+  width: 126px;
+}
+
+.my-offline-table .col-progress {
+  width: 90px;
+}
+
+.my-offline-table .col-speed {
+  width: 132px;
+}
+
+.my-offline-table .col-updated {
+  width: 170px;
+  white-space: nowrap;
+}
+
+.my-offline-table .col-actions {
+  width: 228px;
+  white-space: nowrap;
+}
+
+.my-offline-table .col-status,
+.my-offline-table .col-progress,
+.my-offline-table .col-speed {
+  white-space: nowrap;
+}
+
+.admin-offline-table .col-id {
+  width: 78px;
+  white-space: nowrap;
+}
+
+.admin-offline-table .col-user {
+  width: 128px;
+  white-space: nowrap;
+}
+
+.admin-offline-table .col-status {
+  width: 112px;
+}
+
+.admin-offline-table .col-progress {
+  width: 188px;
+}
+
+.admin-offline-table .col-bindings {
+  width: 96px;
+  white-space: nowrap;
+}
+
+.admin-offline-table .col-updated {
+  width: 170px;
+  white-space: nowrap;
+}
+
+.admin-offline-table .col-actions {
+  width: 110px;
+  white-space: nowrap;
+}
+
+.admin-offline-table .col-status,
+.admin-offline-table .col-progress {
+  white-space: nowrap;
+}
+
+.admin-torrent-manage-table .col-id {
+  width: 72px;
+  white-space: nowrap;
+}
+
+.admin-torrent-manage-table .col-uploader {
+  width: 124px;
+  white-space: nowrap;
+}
+
+.admin-torrent-manage-table .col-status {
+  width: 124px;
+}
+
+.admin-torrent-manage-table .col-trusted {
+  width: 108px;
+}
+
+.admin-torrent-manage-table .col-category {
+  width: 94px;
+  white-space: nowrap;
+}
+
+.admin-torrent-manage-table .col-actions {
+  width: 212px;
+  white-space: nowrap;
+}
+
+.admin-torrent-manage-table .col-status,
+.admin-torrent-manage-table .col-trusted {
+  white-space: nowrap;
+}
+
+.my-offline-table .col-updated,
+.admin-offline-table .col-updated,
+.admin-offline-table .col-user,
+.admin-torrent-manage-table .col-uploader {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cell-stack {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cell-main,
+.cell-sub {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cell-sub {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.offline-error-inline {
+  color: #ef4444;
+}
+
+.text-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+}
+
+.trusted-chip {
+  border-color: color-mix(in srgb, var(--accent-blue) 45%, var(--border));
+  color: var(--accent-blue);
 }
 
 th,
@@ -931,6 +1103,22 @@ tbody tr:last-child td {
     min-width: 1140px;
   }
 
+  .my-offline-table {
+    min-width: 1040px;
+  }
+
+  .admin-offline-table {
+    min-width: 1120px;
+  }
+
+  .admin-torrent-manage-table {
+    min-width: 1020px;
+  }
+
+  .admin-filter-wide {
+    grid-template-columns: 1fr;
+  }
+
   .header-inner {
     grid-template-columns: auto 1fr auto;
   }
@@ -1117,6 +1305,18 @@ tbody tr:last-child td {
   color: #ef4444;
   background: color-mix(in srgb, #ef4444 8%, transparent);
   cursor: pointer;
+}
+
+.table-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  min-width: 88px;
+  padding: 0 12px;
+  white-space: nowrap;
+  line-height: 1;
+  font-size: 0.8rem;
 }
 
 .full-width {
@@ -1426,7 +1626,16 @@ tbody tr:last-child td {
 
 .admin-actions {
   display: inline-flex;
-  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: nowrap;
+  max-width: 100%;
+}
+
+.admin-actions form {
+  margin: 0;
+  display: inline-flex;
 }
 
 .admin-inline-form {
@@ -1787,7 +1996,7 @@ tbody tr:last-child td {
 
 .offline-row-actions {
   justify-content: flex-end;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .new-image-list {

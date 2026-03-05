@@ -64,17 +64,17 @@ export default async function AdminOfflinePage({ searchParams }: AdminOfflinePag
         </form>
 
         <div className="table-wrap">
-          <table className="admin-torrents-table">
+          <table className="admin-offline-table">
             <thead>
               <tr>
-                <th>任务ID</th>
-                <th>种子</th>
-                <th>请求用户</th>
-                <th>状态</th>
-                <th>进度</th>
-                <th>活跃绑定</th>
-                <th>更新时间</th>
-                <th className="align-right">操作</th>
+                <th className="col-id">任务ID</th>
+                <th className="col-torrent">种子</th>
+                <th className="col-user">请求用户</th>
+                <th className="col-status">状态</th>
+                <th className="col-progress">进度</th>
+                <th className="col-bindings">活跃绑定</th>
+                <th className="col-updated">更新时间</th>
+                <th className="align-right col-actions">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -89,25 +89,34 @@ export default async function AdminOfflinePage({ searchParams }: AdminOfflinePag
                   const deleteAction = adminDeleteOfflineJobAction.bind(null, job.job_id);
                   return (
                     <tr key={job.job_id}>
-                      <td>{job.job_id}</td>
-                      <td className="torrent-title-cell">
+                      <td className="col-id">{job.job_id}</td>
+                      <td className="torrent-title-cell col-torrent">
                         <Link className="torrent-title-link" href={`/torrent/${job.torrent_id}`} title={job.torrent_name}>
                           {job.torrent_name}
                         </Link>
                       </td>
-                      <td>{job.requested_by_username}</td>
-                      <td>{job.status}</td>
-                      <td>
-                        {Math.round(Math.max(0, Math.min(1, Number(job.progress || 0))) * 100)}% · {formatBytes(job.downloaded_bytes)} /
-                        {" "}
-                        {formatBytes(job.total_bytes)}
+                      <td className="col-user">{job.requested_by_username}</td>
+                      <td className="col-status">
+                        <span className="text-chip">{job.status}</span>
                       </td>
-                      <td>{job.active_user_count}</td>
-                      <td className="muted">{new Date(job.updated_at).toLocaleString("zh-CN")}</td>
-                      <td className="align-right">
+                      <td className="col-progress">
+                        <div className="cell-stack">
+                          <span className="cell-main">
+                            {Math.round(Math.max(0, Math.min(1, Number(job.progress || 0))) * 100)}%
+                          </span>
+                          <span className="cell-sub">
+                            {formatBytes(job.downloaded_bytes)} / {formatBytes(job.total_bytes)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="col-bindings">{job.active_user_count}</td>
+                      <td className="muted col-updated" title={new Date(job.updated_at).toLocaleString("zh-CN")}>
+                        {new Date(job.updated_at).toLocaleString("zh-CN")}
+                      </td>
+                      <td className="align-right col-actions">
                         <div className="admin-actions">
                           <form action={deleteAction}>
-                            <button className="danger-btn tiny-btn" type="submit">
+                            <button className="danger-btn tiny-btn table-action-btn" type="submit">
                               删除任务
                             </button>
                           </form>

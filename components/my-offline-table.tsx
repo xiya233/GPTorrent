@@ -163,16 +163,16 @@ export function MyOfflineTable({ initialItems, initialQuota, initialQ, initialSt
       <section className="card admin-users-list my-offline-list">
         <h2>我的离线任务</h2>
         <div className="table-wrap">
-          <table className="admin-torrents-table">
+          <table className="my-offline-table">
             <thead>
               <tr>
-                <th>ID</th>
-                <th>种子</th>
-                <th>状态</th>
-                <th>进度</th>
-                <th>速度 / ETA</th>
-                <th>更新时间</th>
-                <th className="align-right">操作</th>
+                <th className="col-id">ID</th>
+                <th className="col-torrent">种子</th>
+                <th className="col-status">状态</th>
+                <th className="col-progress">进度</th>
+                <th className="col-speed">速度 / ETA</th>
+                <th className="col-updated">更新时间</th>
+                <th className="align-right col-actions">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -190,32 +190,50 @@ export function MyOfflineTable({ initialItems, initialQuota, initialQ, initialSt
 
                   return (
                     <tr key={item.user_job_id}>
-                      <td>{item.job_id}</td>
-                      <td className="torrent-title-cell">
+                      <td className="col-id">{item.job_id}</td>
+                      <td className="torrent-title-cell col-torrent">
                         <Link className="torrent-title-link" href={`/torrent/${item.torrent_id}`} title={item.torrent_name}>
                           {item.torrent_name}
                         </Link>
                       </td>
-                      <td>{item.job_status}</td>
-                      <td>{progress}</td>
-                      <td>
-                        {formatBytes(item.download_speed)}/s · {formatEta(item.eta_seconds)}
+                      <td className="col-status">
+                        <div className="cell-stack">
+                          <span className="cell-main text-chip">{item.job_status}</span>
+                          {item.error_message ? (
+                            <span className="cell-sub offline-error-inline" title={item.error_message}>
+                              {item.error_message}
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
-                      <td className="muted">{new Date(item.job_updated_at).toLocaleString("zh-CN")}</td>
-                      <td className="align-right">
+                      <td className="col-progress">
+                        <div className="cell-stack">
+                          <span className="cell-main">{progress}</span>
+                        </div>
+                      </td>
+                      <td className="col-speed">
+                        <div className="cell-stack">
+                          <span className="cell-main">{formatBytes(item.download_speed)}/s</span>
+                          <span className="cell-sub">ETA {formatEta(item.eta_seconds)}</span>
+                        </div>
+                      </td>
+                      <td className="muted col-updated" title={new Date(item.job_updated_at).toLocaleString("zh-CN")}>
+                        {new Date(item.job_updated_at).toLocaleString("zh-CN")}
+                      </td>
+                      <td className="align-right col-actions">
                         <div className="admin-actions offline-row-actions">
                           {item.job_status === "completed" && firstFile ? (
-                            <a className="secondary-btn tiny-btn" href={`/offline/files/${firstFile.id}/download`}>
+                            <a className="secondary-btn tiny-btn table-action-btn" href={`/offline/files/${firstFile.id}/download`}>
                               下载文件
                             </a>
                           ) : null}
                           {item.job_status === "completed" && firstVideo ? (
-                            <Link className="secondary-btn tiny-btn" href={`/offline/play/${firstVideo.id}`}>
+                            <Link className="secondary-btn tiny-btn table-action-btn" href={`/offline/play/${firstVideo.id}`}>
                               在线播放
                             </Link>
                           ) : null}
                           <button
-                            className="danger-btn tiny-btn"
+                            className="danger-btn tiny-btn table-action-btn"
                             disabled={busyId === item.user_job_id}
                             onClick={() => removeJob(item.user_job_id)}
                             type="button"
@@ -223,7 +241,6 @@ export function MyOfflineTable({ initialItems, initialQuota, initialQ, initialSt
                             {busyId === item.user_job_id ? "移除中..." : "移除任务"}
                           </button>
                         </div>
-                        {item.error_message ? <p className="form-error">{item.error_message}</p> : null}
                       </td>
                     </tr>
                   );
