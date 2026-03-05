@@ -307,7 +307,7 @@ table {
 }
 
 .my-offline-table .col-actions {
-  width: 228px;
+  width: 124px;
   white-space: nowrap;
 }
 
@@ -416,6 +416,58 @@ table {
 }
 
 .offline-error-inline {
+  color: #ef4444;
+}
+
+.row-action-menu-root {
+  position: relative;
+  display: inline-flex;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.row-action-trigger {
+  min-width: 0;
+  width: 100%;
+}
+
+.row-action-menu-dropdown {
+  position: fixed;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  z-index: 120;
+}
+
+.row-action-menu-item {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.row-action-menu-item:hover {
+  background: color-mix(in srgb, var(--text-primary) 7%, transparent);
+}
+
+.row-action-menu-item.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.row-action-menu-item.is-danger {
   color: #ef4444;
 }
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { OfflineRowActionMenu } from "@/components/offline-row-action-menu";
 
 type OfflineFileLite = {
   id: number;
@@ -78,6 +79,7 @@ export function MyOfflineTable({ initialItems, initialQuota, initialQ, initialSt
   const [items, setItems] = useState(initialItems);
   const [quota, setQuota] = useState(initialQuota);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -88,6 +90,7 @@ export function MyOfflineTable({ initialItems, initialQuota, initialQ, initialSt
   );
 
   async function refreshList() {
+    setOpenMenuId(null);
     setRefreshing(true);
     setError("");
     setNotice("");
@@ -117,6 +120,7 @@ export function MyOfflineTable({ initialItems, initialQuota, initialQ, initialSt
   }
 
   async function removeJob(userJobId: number) {
+    setOpenMenuId(null);
     setBusyId(userJobId);
     setError("");
     setNotice("");
@@ -198,12 +202,12 @@ export function MyOfflineTable({ initialItems, initialQuota, initialQ, initialSt
                       </td>
                       <td className="col-status">
                         <div className="cell-stack">
-                          <span className="cell-main text-chip">{item.job_status}</span>
-                          {item.error_message ? (
-                            <span className="cell-sub offline-error-inline" title={item.error_message}>
-                              {item.error_message}
-                            </span>
-                          ) : null}
+                          <span
+                            className="cell-main text-chip"
+                            title={item.job_status === "failed" && item.error_message ? item.error_message : undefined}
+                          >
+                            {item.job_status}
+                          </span>
                         </div>
                       </td>
                       <td className="col-progress">
@@ -221,26 +225,19 @@ export function MyOfflineTable({ initialItems, initialQuota, initialQ, initialSt
                         {new Date(item.job_updated_at).toLocaleString("zh-CN")}
                       </td>
                       <td className="align-right col-actions">
-                        <div className="admin-actions offline-row-actions">
-                          {item.job_status === "completed" && firstFile ? (
-                            <a className="secondary-btn tiny-btn table-action-btn" href={`/offline/files/${firstFile.id}/download`}>
-                              下载文件
-                            </a>
-                          ) : null}
-                          {item.job_status === "completed" && firstVideo ? (
-                            <Link className="secondary-btn tiny-btn table-action-btn" href={`/offline/play/${firstVideo.id}`}>
-                              在线播放
-                            </Link>
-                          ) : null}
-                          <button
-                            className="danger-btn tiny-btn table-action-btn"
-                            disabled={busyId === item.user_job_id}
-                            onClick={() => removeJob(item.user_job_id)}
-                            type="button"
-                          >
-                            {busyId === item.user_job_id ? "移除中..." : "移除任务"}
-                          </button>
-                        </div>
+                        <OfflineRowActionMenu
+                          canDownload={item.job_status === "completed" && Boolean(firstFile)}
+                          canPlay={item.job_status === "completed" && Boolean(firstVideo)}
+                          downloadHref={firstFile ? `/offline/files/${firstFile.id}/download` : "#"}
+                          onClose={() => setOpenMenuId(null)}
+                          onRemove={() => removeJob(item.user_job_id)}
+                          onToggle={() => setOpenMenuId((prev) => (prev === item.user_job_id ? null : item.user_job_id))}
+                          open={openMenuId === item.user_job_id}
+                          playHref={firstVideo ? `/offline/play/${firstVideo.id}` : "#"}
+                          removeDisabled={busyId === item.user_job_id}
+                          removeLabel={busyId === item.user_job_id ? "移除中..." : "移除任务"}
+                          rowId={item.user_job_id}
+                        />
                       </td>
                     </tr>
                   );
