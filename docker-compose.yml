@@ -3,8 +3,8 @@ services:
     image: lscr.io/linuxserver/qbittorrent:4.5.5
     container_name: btshare-qb
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=${PUID:-10001}
+      - PGID=${PGID:-10001}
       - TZ=${TZ:-Asia/Shanghai}
       - WEBUI_PORT=8080
     volumes:
@@ -24,6 +24,10 @@ services:
     container_name: btshare-app
     env_file:
       - ./.env
+    environment:
+      - PUID=${PUID:-10001}
+      - PGID=${PGID:-10001}
+      - CHOWN_MODE=${CHOWN_MODE:-auto}
     depends_on:
       - qbittorrent
     command: ["bun", "run", "start"]
@@ -38,6 +42,10 @@ services:
     container_name: btshare-tracker-worker
     env_file:
       - ./.env
+    environment:
+      - PUID=${PUID:-10001}
+      - PGID=${PGID:-10001}
+      - CHOWN_MODE=${CHOWN_MODE:-auto}
     depends_on:
       - app
     command: ["bun", "run", "tracker:worker"]
@@ -50,6 +58,10 @@ services:
     container_name: btshare-offline-worker
     env_file:
       - ./.env
+    environment:
+      - PUID=${PUID:-10001}
+      - PGID=${PGID:-10001}
+      - CHOWN_MODE=${CHOWN_MODE:-auto}
     depends_on:
       - app
       - qbittorrent
@@ -63,6 +75,10 @@ services:
     container_name: btshare-cleanup-worker
     env_file:
       - ./.env
+    environment:
+      - PUID=${PUID:-10001}
+      - PGID=${PGID:-10001}
+      - CHOWN_MODE=${CHOWN_MODE:-auto}
     depends_on:
       - app
     command:
