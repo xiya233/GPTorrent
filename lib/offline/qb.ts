@@ -8,6 +8,10 @@ export type QbTorrentInfo = {
   eta: number;
   state: string;
   completion_on: number;
+  save_path?: string;
+  name?: string;
+  added_on?: number;
+  tags?: string;
 };
 
 export type QbTorrentFile = {
@@ -116,6 +120,42 @@ class QbClient {
     return rows[0];
   }
 
+  async listTorrentsByTag(tag?: string) {
+    const params = new URLSearchParams();
+    if (tag && tag.trim()) {
+      params.set("tag", tag.trim());
+    }
+    const query = params.toString();
+    const response = await this.request(`/api/v2/torrents/info${query ? `?${query}` : ""}`);
+    if (!response.ok) {
+      throw new Error(`qB 获取任务列表失败: http ${response.status}`);
+    }
+    const rows = (await response.json()) as QbTorrentInfo[];
+    if (!Array.isArray(rows)) {
+      return [];
+    }
+    return rows;
+  }
+
+  async findTorrentHashBySavePath(savePathAbs: string, tag?: string) {
+    const expected = normalizePath(savePathAbs);
+    if (!expected) {
+      return null;
+    }
+
+    const rows = await this.listTorrentsByTag(tag);
+    for (const row of rows) {
+      const savePath = normalizePath(row.save_path || "");
+      if (savePath === expected) {
+        const hash = String(row.hash || "").trim().toLowerCase();
+        if (hash) {
+          return hash;
+        }
+      }
+    }
+    return null;
+  }
+
   async getTorrentFiles(hash: string) {
     const response = await this.request(`/api/v2/torrents/files?hash=${encodeURIComponent(hash)}`);
     if (!response.ok) {
@@ -147,6 +187,10 @@ class QbClient {
       throw new Error(`qB 删除任务失败: http ${response.status}`);
     }
   }
+}
+
+function normalizePath(raw: string) {
+  return raw.replace(/\\/g, "/").replace(/\/+$/, "").trim();
 }
 
 let client: QbClient | null = null;

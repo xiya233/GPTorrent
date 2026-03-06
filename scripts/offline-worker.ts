@@ -20,6 +20,7 @@ import {
   setOfflineFileUpgradeState,
   updateOfflineFileHlsProgress,
   updateOfflineFileVariantCount,
+  updateOfflineJobQbHash,
   updateOfflineJobProgress,
 } from "../lib/db";
 import {
@@ -35,6 +36,7 @@ import { generatePosterFromVideo, transcodeToHls } from "../lib/offline/transcod
 import { guessMimeType, isVideoPath } from "../lib/offline/video";
 
 const DEFAULT_SLEEP_MS = 20_000;
+const QBT_NOT_FOUND_GRACE_SECONDS = 60;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -58,6 +60,18 @@ function formatError(error: unknown) {
     return error.message;
   }
   return String(error);
+}
+
+function secondsSince(isoTime: string) {
+  const ms = Date.parse(isoTime);
+  if (!Number.isFinite(ms)) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return Math.max(0, Math.floor((Date.now() - ms) / 1000));
+}
+
+function withinQbNotFoundGrace(updatedAt: string) {
+  return secondsSince(updatedAt) <= QBT_NOT_FOUND_GRACE_SECONDS;
 }
 
 function buildTorrentFileIdFinder(torrentId: number) {
@@ -138,11 +152,24 @@ async function processQueuedJobs(verbose: boolean) {
         tags: ["btshare-offline"],
       });
 
-      const started = markOfflineJobDownloading(job.id, infoHash);
+      let discoveredHash = "";
+      try {
+        discoveredHash = (await qb.findTorrentHashBySavePath(savePathAbs, "btshare-offline")) || "";
+      } catch (error) {
+        if (verbose) {
+          console.log(
+            `[offline-worker][verbose] queued-hash-discovery-failed job=${job.id} reason=${formatError(error)}`,
+          );
+        }
+      }
+
+      const started = markOfflineJobDownloading(job.id, discoveredHash || infoHash);
       if (started) {
         queuedStarted += 1;
         if (verbose) {
-          console.log(`[offline-worker][verbose] queued->downloading job=${job.id} torrent=${job.torrent_id}`);
+          console.log(
+            `[offline-worker][verbose] queued->downloading job=${job.id} torrent=${job.torrent_id} hash=${(discoveredHash || infoHash).slice(0, 12)}`,
+          );
         }
       }
     } catch (error) {
@@ -173,17 +200,66 @@ async function processDownloadingJobs(verbose: boolean) {
 
   for (const job of jobs) {
     try {
-      const hash = (job.qb_hash || "").trim().toLowerCase();
-      if (!hash) {
-        markOfflineJobFailed(job.id, "缺少 qB 哈希", "downloading");
+      const savePathAbs = resolveDataRelativePath(job.save_path);
+      if (!savePathAbs) {
+        markOfflineJobFailed(job.id, "离线路径非法", "downloading");
         failed += 1;
+        continue;
+      }
+
+      const recoverHash = async (currentHash: string) => {
+        const recovered = (await qb.findTorrentHashBySavePath(savePathAbs, "btshare-offline")) || "";
+        if (recovered && recovered !== currentHash) {
+          updateOfflineJobQbHash(job.id, recovered);
+          if (verbose) {
+            console.log(
+              `[offline-worker][verbose] qbhash-recovered job=${job.id} old=${currentHash || "empty"} new=${recovered}`,
+            );
+          }
+          return recovered;
+        }
+        return recovered;
+      };
+
+      let hash = (job.qb_hash || "").trim().toLowerCase();
+      if (!hash) {
+        const recovered = await recoverHash("");
+        if (recovered) {
+          continue;
+        }
+        if (withinQbNotFoundGrace(job.updated_at)) {
+          if (verbose) {
+            const left = Math.max(0, QBT_NOT_FOUND_GRACE_SECONDS - secondsSince(job.updated_at));
+            console.log(`[offline-worker][verbose] qbhash-waiting job=${job.id} reason=empty_hash grace_left=${left}s`);
+          }
+          continue;
+        }
+        markOfflineJobFailed(job.id, "qB 任务不存在", "downloading");
+        failed += 1;
+        if (verbose) {
+          console.log(`[offline-worker][verbose] qbhash-final-failed job=${job.id} reason=empty_hash`);
+        }
         continue;
       }
 
       const info = await qb.getTorrentInfo(hash);
       if (!info) {
+        const recovered = await recoverHash(hash);
+        if (recovered && recovered !== hash) {
+          continue;
+        }
+        if (withinQbNotFoundGrace(job.updated_at)) {
+          if (verbose) {
+            const left = Math.max(0, QBT_NOT_FOUND_GRACE_SECONDS - secondsSince(job.updated_at));
+            console.log(`[offline-worker][verbose] qbhash-waiting job=${job.id} reason=info_not_found grace_left=${left}s`);
+          }
+          continue;
+        }
         markOfflineJobFailed(job.id, "qB 任务不存在", "downloading");
         failed += 1;
+        if (verbose) {
+          console.log(`[offline-worker][verbose] qbhash-final-failed job=${job.id} reason=info_not_found`);
+        }
         continue;
       }
 

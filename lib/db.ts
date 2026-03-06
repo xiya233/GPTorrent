@@ -1952,6 +1952,15 @@ export function markOfflineJobDownloading(jobId: number, qbHash: string) {
   return result.changes > 0;
 }
 
+export function updateOfflineJobQbHash(jobId: number, qbHash: string) {
+  const hash = String(qbHash || "").trim().toLowerCase();
+  if (!hash) {
+    return;
+  }
+  const now = new Date().toISOString();
+  db.query("UPDATE offline_jobs SET qb_hash = ?, updated_at = ? WHERE id = ?").run(hash, now, jobId);
+}
+
 export function updateOfflineJobProgress(
   jobId: number,
   input: {
