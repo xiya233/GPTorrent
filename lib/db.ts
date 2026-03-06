@@ -718,17 +718,64 @@ function bootstrapAdminUser() {
     return;
   }
 
-  const existing = getUserByUsername(username);
-  if (existing) {
-    if (existing.role !== "admin" || existing.status !== "active") {
-      db.query(
-        "UPDATE users SET role = 'admin', status = 'active', updated_at = ? WHERE id = ?",
-      ).run(new Date().toISOString(), existing.id);
+  const now = new Date().toISOString();
+  const passwordHash = hashPassword(password);
+
+  try {
+    db.query(`
+      INSERT INTO users (
+        username,
+        password_hash,
+        avatar_path,
+        bio,
+        is_profile_public,
+        offline_quota_bytes,
+        role,
+        status,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        $username,
+        $passwordHash,
+        '',
+        '',
+        1,
+        $offlineQuotaBytes,
+        'admin',
+        'active',
+        $now,
+        $now
+      )
+      ON CONFLICT(username) DO NOTHING
+    `).run({
+      $username: username,
+      $passwordHash: passwordHash,
+      $offlineQuotaBytes: OFFLINE_DEFAULT_QUOTA_BYTES,
+      $now: now,
+    });
+  } catch (error) {
+    const sqliteError = error as { code?: string; message?: string };
+    if (sqliteError.code !== "SQLITE_CONSTRAINT_UNIQUE") {
+      console.error("[bootstrapAdminUser] 插入管理员失败:", error);
+      throw error;
     }
-    return;
+    // Defensive fallback: ON CONFLICT 已经兜底，理论上不会进入这里。
   }
 
-  createUser({ username, passwordHash: hashPassword(password), role: "admin" });
+  try {
+    db.query(`
+      UPDATE users
+      SET role = 'admin', status = 'active', updated_at = $now
+      WHERE username = $username AND (role != 'admin' OR status != 'active')
+    `).run({
+      $username: username,
+      $now: now,
+    });
+  } catch (error) {
+    console.error("[bootstrapAdminUser] 更新管理员角色状态失败:", error);
+    throw error;
+  }
 }
 
 function backfillOfflineUserJobs() {
