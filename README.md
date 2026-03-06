@@ -23,7 +23,9 @@
 ## 项目截图
 
 ![首页](/docs/images/home.png)
-![种子详情](/docs/images/detail.png)
+![种子详情](/docs/images/torrent-page.png)
+![在线播放](/docs/images/play.png)
+![离线下载](/docs/images/download.png)
 
 ## 环境准备
 
