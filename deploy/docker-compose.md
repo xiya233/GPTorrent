@@ -1,14 +1,12 @@
-# Docker Compose 部署（仓库内置配置，含 FFmpeg）
-
-> 目标：只要准备 `.env` 并执行 `docker compose up -d --build`，就能一次启动 Web、Tracker Worker、Offline Worker、Cleanup Worker、qBittorrent，且离线转码可直接使用 `ffmpeg/ffprobe`。
+# Docker Compose 部署
 
 ## 1. 前置条件
 
-1. 系统：Debian 13（或兼容 Linux）
+1. 系统：Debian 13（或其他Linux）
 2. 已安装 Docker Engine + Docker Compose Plugin
 3. 域名已解析到服务器公网 IP（示例：`bt.example.com`）
-4. 防火墙已放通 `80/443`（以及可选 BT 端口 `6881/tcp+udp`）
-5. 主机已安装 Nginx + Certbot（用于 HTTPS，Nginx 不跑容器）
+4. 防火墙已放开 `80/443`（以及qBittorrent端口 `6881/tcp+udp`）
+5. 主机已安装 Nginx + Certbot（用于HTTPS）
 
 ## 2. 安装 Docker / Compose（Debian）
 
@@ -34,19 +32,12 @@ sudo systemctl enable --now docker
 ## 3. 拉取项目并准备目录
 
 ```bash
-sudo mkdir -p /opt/btshare
-sudo chown -R $USER:$USER /opt/btshare
-cd /opt/btshare
-
-git clone <你的仓库地址> app
-cd app
-
-mkdir -p data deploy/qb/config
+cd /opt
+git clone https://github.com/xiya233/GPTorrent.git
+cd GPTorrent
 ```
 
-## 4. 配置环境变量（根目录 `.env`）
-
-仓库已提供 `.env.example`，复制后按需修改：
+## 4. 配置环境变量（`.env`）
 
 ```bash
 cp .env.example .env
@@ -61,25 +52,23 @@ cp .env.example .env
 5. `OFFLINE_RETENTION_DAYS`
 6. `PUID` / `PGID` / `CHOWN_MODE`
 
+## 5. 关键说明
+
 `PUID/PGID` 是容器内进程使用的数字 UID/GID，不要求宿主机存在同名用户。  
-默认值 `10001:10001` 可直接用于“宿主机只有 root 用户”的场景。
+默认值 `10001:10001` 可不做修改，目的只是为了让容器内的应用不使用root运行。
 
-## 5. 关键说明（FFmpeg 已内置）
-
-仓库已提供：
-
-1. 根目录 `Dockerfile`（多阶段构建）
-2. 根目录 `docker-compose.yml`（5 个服务）
-
-`Dockerfile` 的运行层通过 `apt` 安装了 `ffmpeg`，所以 `offline-worker` 无需依赖宿主机 ffmpeg。
-同时镜像内置了 entrypoint 自动降权逻辑：
+镜像内置了 entrypoint 自动降权逻辑：
 
 1. 容器先以 root 启动，读取 `PUID/PGID`
 2. 自动创建/复用对应 UID/GID
 3. `CHOWN_MODE=auto` 时对 `/app/data` 做按需 `chown`
 4. 最终使用 `gosu` 以非 root 运行 `app/tracker/offline/cleanup`
 
-首次启动如果 `data/` 很大，按需 `chown` 会有额外耗时，这是预期行为。
+仓库已提供：
+
+1. 根目录 `Dockerfile`（多阶段构建）
+2. 根目录 `docker-compose.yml`
+
 
 ## 6. 一键启动
 
@@ -96,36 +85,16 @@ docker compose logs -f tracker-worker
 docker compose logs -f offline-worker
 ```
 
-检查容器是否已降权：
-
-```bash
-docker compose exec app id
-docker compose exec tracker-worker id
-docker compose exec offline-worker id
-docker compose exec cleanup-worker id
-```
-
-期望看到 `uid`/`gid` 为你设置的 `PUID/PGID`（默认 `10001`），而不是 `0(root)`。
-
-## 7. 验证 FFmpeg / FFprobe 可用
-
-```bash
-docker compose exec app ffmpeg -version
-docker compose exec offline-worker ffprobe -version
-```
-
-如果两条命令都能输出版本号，说明转码依赖已就绪。
-
-## 8. 主机 Nginx 反向代理（非容器）
+## 7. 主机 Nginx 反向代理
 
 安装（若未安装）：
 
 ```bash
 sudo apt update
-sudo apt install -y nginx certbot python3-certbot-nginx
+sudo apt install -y nginx python3-certbot-nginx
 ```
 
-创建 `/etc/nginx/sites-available/btshare.conf`：
+创建 `/etc/nginx/sites-available/gptorrent.conf`：
 
 ```nginx
 server {
@@ -156,26 +125,19 @@ server {
 启用并重载：
 
 ```bash
-sudo ln -sf /etc/nginx/sites-available/btshare.conf /etc/nginx/sites-enabled/btshare.conf
+sudo ln -sf /etc/nginx/sites-available/gptorrent.conf /etc/nginx/sites-enabled/gptorrent.conf
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-## 9. 启用 HTTPS（Certbot）
+申请证书：
 
 ```bash
 sudo certbot --nginx -d bt.example.com
 sudo certbot renew --dry-run
 ```
 
-## 10. 首次上线验收
-
-1. 打开 `https://bt.example.com`，首页可访问
-2. 能登录并上传 `.torrent`
-3. 能创建离线任务，`offline-worker` 有推进日志
-4. 打开视频时转码正常（不再报 `ffmpeg not found`）
-
-## 11. 运维命令
+## 8. 运维命令
 
 ```bash
 # 实时日志
@@ -194,18 +156,10 @@ git pull
 docker compose up -d --build
 ```
 
-## 12. 备份建议
+## 9. 备份建议
 
 至少备份以下目录/文件：
 
-1. `data/`（SQLite、上传文件、离线文件、HLS、头像、站点文件）
-2. `deploy/qb/config/`（qB 配置）
-3. `.env`（请妥善保管，不要提交到仓库）
-
-## 13. 常见问题
-
-1. `qB 登录失败`：检查 `.env` 中 `QBITTORRENT_*` 是否与 qB WebUI 一致。  
-2. `离线任务无法转码`：先执行 `docker compose exec offline-worker ffmpeg -version`。  
-3. `502 Bad Gateway`：检查 `docker compose ps` 中 `app` 是否运行。  
-4. `HTTPS 失败`：检查 DNS 和 80 端口连通性。  
-5. `权限异常（qB 错误/目录不可写）`：确认 app/worker/qB 使用同一 `PUID/PGID`，必要时删除旧标记后重启：`rm -f data/.ownership-fixed-* && docker compose restart`。
+1. `data/`（程序所有的数据都存储在这里）
+2. `.env`（请妥善保管）
+3. `config/`（qBittorrent配置）
