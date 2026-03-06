@@ -1477,19 +1477,9 @@ tbody tr:last-child td {
   display: inline-flex;
 }
 
-.user-row-menu > summary {
-  list-style: none;
-}
-
-.user-row-menu > summary::-webkit-details-marker {
-  display: none;
-}
-
-.user-row-menu-dropdown {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 40;
+.user-row-menu-dropdown-floating {
+  position: fixed;
+  z-index: 300;
   min-width: 98px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -1498,9 +1488,11 @@ tbody tr:last-child td {
   padding: 6px;
   display: grid;
   gap: 4px;
+  max-height: min(55vh, 320px);
+  overflow-y: auto;
 }
 
-.user-row-menu-dropdown form {
+.user-row-menu-dropdown-floating form {
   margin: 0;
 }
 

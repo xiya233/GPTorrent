@@ -6,6 +6,7 @@ import {
   adminUnbanUserAction,
   adminUpdateUserOfflineQuotaAction,
 } from "@/app/admin/users/actions";
+import { UserRowActionMenu } from "@/components/user-row-action-menu";
 import { requireAdminUser } from "@/lib/auth";
 import { listUsers, type UserStatus } from "@/lib/db";
 
@@ -93,40 +94,15 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                         </td>
                         <td className="muted col-created">{new Date(user.created_at).toLocaleString("zh-CN")}</td>
                         <td className="align-right col-actions">
-                          <details className="user-row-menu">
-                            <summary className="secondary-btn tiny-btn table-action-btn fixed-action-btn">操作</summary>
-                            <div className="user-row-menu-dropdown">
-                              <form action={updateQuotaAction} className="user-row-menu-quota-form">
-                                <input defaultValue={quotaGb} min={1} name="offlineQuotaGb" title="离线配额(GB)" type="number" />
-                                <button className="user-row-menu-item" type="submit">
-                                  保存配额
-                                </button>
-                              </form>
-                              {user.status === "active" ? (
-                                <form action={banAction}>
-                                  <button className="user-row-menu-item" type="submit">
-                                    封禁
-                                  </button>
-                                </form>
-                              ) : null}
-
-                              {user.status === "banned" ? (
-                                <form action={unbanAction}>
-                                  <button className="user-row-menu-item" type="submit">
-                                    解封
-                                  </button>
-                                </form>
-                              ) : null}
-
-                              {user.status !== "deleted" ? (
-                                <form action={deleteAction}>
-                                  <button className="user-row-menu-item is-danger" type="submit">
-                                    删除
-                                  </button>
-                                </form>
-                              ) : null}
-                            </div>
-                          </details>
+                          <UserRowActionMenu
+                            onBan={banAction}
+                            onDelete={deleteAction}
+                            onSaveQuota={updateQuotaAction}
+                            onUnban={unbanAction}
+                            quotaGb={quotaGb}
+                            rowId={user.id}
+                            userStatus={user.status}
+                          />
                         </td>
                       </tr>
                     );
