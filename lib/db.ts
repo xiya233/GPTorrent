@@ -1589,6 +1589,8 @@ export function retryOfflineUserJobForUser(input: {
       return { ok: false as const, reason: "invalid_status" as const, jobStatus: row.job_status };
     }
 
+    const previousJobId = row.job_id;
+
     const quota = getOfflineQuotaSnapshot(input.userId);
     const activeGlobalJob = db
       .query(
@@ -1676,6 +1678,16 @@ export function retryOfflineUserJobForUser(input: {
       WHERE id = ?
       `,
     ).run(job.id, reservedBytes, now, now, row.id);
+
+    const previousActiveRef = db
+      .query("SELECT COUNT(1) AS count FROM offline_user_jobs WHERE job_id = ? AND status = 'active'")
+      .get(previousJobId) as { count: number };
+
+    if (previousActiveRef.count === 0) {
+      db.query(
+        "UPDATE offline_jobs SET status = 'expired', updated_at = ?, last_accessed_at = ?, expires_at = ?, download_speed = 0, eta_seconds = NULL WHERE id = ? AND status = 'failed'",
+      ).run(now, now, now, previousJobId);
+    }
 
     const userJob = db.query("SELECT * FROM offline_user_jobs WHERE id = ? LIMIT 1").get(row.id) as OfflineUserJobRow;
     const latestQuota = getOfflineQuotaSnapshot(input.userId);
