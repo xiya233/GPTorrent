@@ -1,0 +1,16 @@
+services:
+  app:
+    image: ghcr.io/xiya233/gptorrent:${APP_IMAGE_TAG:-latest}
+    pull_policy: always
+
+  tracker-worker:
+    image: ghcr.io/xiya233/gptorrent:${APP_IMAGE_TAG:-latest}
+    pull_policy: always
+
+  offline-worker:
+    image: ghcr.io/xiya233/gptorrent:${APP_IMAGE_TAG:-latest}
+    pull_policy: always
+
+  cleanup-worker:
+    image: ghcr.io/xiya233/gptorrent:${APP_IMAGE_TAG:-latest}
+    pull_policy: always

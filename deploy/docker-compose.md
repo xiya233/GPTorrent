@@ -1,4 +1,4 @@
-# Docker Compose 部署
+# Docker Compose 部署（支持 GHCR 预构建镜像）
 
 ## 1. 前置条件
 
@@ -51,6 +51,7 @@ cp .env.example .env
 4. `OFFLINE_MAX_CONCURRENCY`
 5. `OFFLINE_RETENTION_DAYS`
 6. `PUID` / `PGID` / `CHOWN_MODE`
+7. `APP_IMAGE_TAG`（仅 GHCR 模式需要，可选，默认 `latest`）
 
 ## 5. 关键说明
 
@@ -68,13 +69,48 @@ cp .env.example .env
 
 1. 根目录 `Dockerfile`（多阶段构建）
 2. 根目录 `docker-compose.yml`
+3. 根目录 `docker-compose.ghcr.yml`
+4. GitHub Actions 工作流：`.github/workflows/docker-publish.yml`
 
+## 6. 镜像标签规则（GHCR）
 
-## 6. 一键启动
+镜像名固定为：`ghcr.io/xiya233/gptorrent`
+
+1. push 到 `main`：
+   - `edge`
+   - `sha-<shortsha>`
+2. push tag（例如 `v1.2.3`）：
+   - `1.2.3`
+   - `1.2`
+   - `1`
+   - `latest`
+
+## 7. 启动方式
+
+### 方式 A：本地构建（开发/自定义构建）
 
 ```bash
 docker compose up -d --build
 ```
+
+### 方式 B：GHCR 预构建镜像（生产推荐）
+
+先在 `.env` 设置你要的标签（可选）：
+
+```bash
+APP_IMAGE_TAG=latest
+# 或 APP_IMAGE_TAG=edge
+# 或 APP_IMAGE_TAG=1.2.3
+```
+
+执行：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.ghcr.yml pull
+docker compose -f docker-compose.yml -f docker-compose.ghcr.yml up -d --no-build
+```
+
+> 说明：`--no-build` 可确保生产机不会走本地 Dockerfile 构建。
 
 查看状态：
 
@@ -85,7 +121,7 @@ docker compose logs -f tracker-worker
 docker compose logs -f offline-worker
 ```
 
-## 7. 主机 Nginx 反向代理
+## 8. 主机 Nginx 反向代理
 
 安装（若未安装）：
 
@@ -137,7 +173,7 @@ sudo certbot --nginx -d bt.example.com
 sudo certbot renew --dry-run
 ```
 
-## 8. 运维命令
+## 9. 运维命令
 
 ```bash
 # 实时日志
@@ -156,7 +192,23 @@ git pull
 docker compose up -d --build
 ```
 
-## 9. 备份建议
+GHCR 模式升级：
+
+```bash
+git pull
+docker compose -f docker-compose.yml -f docker-compose.ghcr.yml pull
+docker compose -f docker-compose.yml -f docker-compose.ghcr.yml up -d --no-build
+```
+
+GHCR 模式回滚（改成旧 tag）：
+
+```bash
+sed -i 's/^APP_IMAGE_TAG=.*/APP_IMAGE_TAG=1.2.3/' .env
+docker compose -f docker-compose.yml -f docker-compose.ghcr.yml pull
+docker compose -f docker-compose.yml -f docker-compose.ghcr.yml up -d --no-build
+```
+
+## 10. 备份建议
 
 至少备份以下目录/文件：
 

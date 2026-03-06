@@ -21,8 +21,9 @@
 2. 服务器已放通 TCP `80/443`。
 3. 程序通过主机 Nginx 反向代理，HTTPS 证书使用 Certbot 自动签发。
 4. 运行目录都使用本地磁盘持久化（SQLite 与上传文件都在 `data/`）。
-5. 仓库已内置 Docker 生产配置：`Dockerfile`、`docker-compose.yml`、`.env.example`。
-6. Compose 方案支持 `PUID/PGID` 自动降权（root-only VPS 也可直接 `docker compose up -d`）。
+5. 仓库已内置 Docker 生产配置：`Dockerfile`、`docker-compose.yml`、`docker-compose.ghcr.yml`、`.env.example`。
+6. 仓库已内置 GHCR 自动发布工作流：`.github/workflows/docker-publish.yml`。
+7. Compose 方案支持 `PUID/PGID` 自动降权（root-only VPS 也可直接 `docker compose up -d`）。
 
 ## 核心进程清单
 

@@ -136,3 +136,16 @@ export TORRENT_CLEANUP_RETENTION_DAYS=7
 - 总览：`deploy/README.md`
 - Debian 13 手动部署（Bun + systemd + Nginx反向代理）：`deploy/debian13-manual.md`
 - Docker Compose 部署（app + workers + qBittorrent + Nginx反向代理）：`deploy/docker-compose.md`
+
+## GHCR 预构建镜像发布
+
+- 自动发布工作流：`.github/workflows/docker-publish.yml`
+- 生产镜像：`ghcr.io/xiya233/gptorrent`
+- GHCR 覆盖 compose：`docker-compose.ghcr.yml`
+
+常用生产命令（使用 GHCR 预构建镜像）：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.ghcr.yml pull
+docker compose -f docker-compose.yml -f docker-compose.ghcr.yml up -d --no-build
+```
