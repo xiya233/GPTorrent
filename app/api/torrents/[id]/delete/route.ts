@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME, getUserStateFromToken } from "@/lib/auth";
 import { getSiteFeatureFlags, getTorrentById, softDeleteTorrent } from "@/lib/db";
+import { redirectRelative } from "@/lib/http/redirect";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -43,5 +44,5 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const formData = await request.formData().catch(() => null);
   const redirectTo = ((formData?.get("redirectTo") as string | null) ?? "").trim() || "/my/torrents";
 
-  return NextResponse.redirect(new URL(redirectTo, request.url), 303);
+  return redirectRelative(redirectTo, 303);
 }

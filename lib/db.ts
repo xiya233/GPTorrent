@@ -369,7 +369,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE TABLE IF NOT EXISTS site_settings (
   id INTEGER PRIMARY KEY CHECK(id = 1),
-  title_text TEXT NOT NULL DEFAULT 'Sukebei.dl',
+  title_text TEXT NOT NULL DEFAULT 'GPTorrent',
   logo_path TEXT NOT NULL DEFAULT '',
   single_user_mode INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL
@@ -663,7 +663,7 @@ db.exec("CREATE INDEX IF NOT EXISTS idx_offline_files_poster_status ON offline_f
 const settingsExists = db.query("SELECT id FROM site_settings WHERE id = 1").get() as { id: number } | null;
 if (!settingsExists) {
   db.query(
-    "INSERT INTO site_settings (id, title_text, logo_path, allow_guest_upload, allow_user_delete_torrent, enable_login_captcha, enable_register_captcha, max_avatar_upload_mb, max_torrent_image_upload_mb, allow_guest_torrent_image_upload, guest_torrent_file_max_mb, user_torrent_file_max_mb, allow_user_register, updated_at) VALUES (1, 'Sukebei.dl', '', 1, 1, 1, 1, 2, 2, 1, 1, 10, 1, ?)",
+    "INSERT INTO site_settings (id, title_text, logo_path, allow_guest_upload, allow_user_delete_torrent, enable_login_captcha, enable_register_captcha, max_avatar_upload_mb, max_torrent_image_upload_mb, allow_guest_torrent_image_upload, guest_torrent_file_max_mb, user_torrent_file_max_mb, allow_user_register, updated_at) VALUES (1, 'GPTorrent', '', 1, 1, 1, 1, 2, 2, 1, 1, 10, 1, ?)",
   ).run(new Date().toISOString());
 }
 
@@ -3057,7 +3057,7 @@ export function getSiteSettings(): SiteSettings {
 
   if (!row) {
     return {
-      titleText: "Sukebei.dl",
+      titleText: "GPTorrent",
       logoPath: "",
       descriptionText: "",
       singleUserMode: false,

@@ -39,7 +39,7 @@ export default async function EditTorrentPage({ params }: EditPageProps) {
     <div className="container page-content">
       <div className="page-heading-row">
         <h1>编辑种子</h1>
-        <Link className="secondary-btn" href={`/torrent/${detail.torrent.id}`}>
+        <Link className="primary-btn" href={`/torrent/${detail.torrent.id}`}>
           返回详情
         </Link>
       </div>

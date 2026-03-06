@@ -9,6 +9,7 @@ import {
 type SiteFormProps = {
   titleText: string;
   descriptionText: string;
+  hasLogo: boolean;
   singleUserMode: boolean;
   allowGuestUpload: boolean;
   allowUserDeleteTorrent: boolean;
@@ -25,6 +26,7 @@ type SiteFormProps = {
 export function SiteForm({
   titleText,
   descriptionText,
+  hasLogo,
   singleUserMode,
   allowGuestUpload,
   allowUserDeleteTorrent,
@@ -71,8 +73,16 @@ export function SiteForm({
       <div className="field-group">
         <label htmlFor="logoFile">LOGO 图片</label>
         <input accept="image/jpeg,image/png,image/webp,image/svg+xml" id="logoFile" name="logoFile" type="file" />
-        <small>支持 jpg/png/webp/svg，最大 2MB</small>
+        <small>支持 jpg/png/webp/svg，最大 2MB{hasLogo ? "，当前已配置 LOGO" : ""}</small>
       </div>
+
+      <label className="checkbox-row" htmlFor="restoreLogo">
+        <input id="restoreLogo" name="restoreLogo" type="checkbox" />
+        <span>
+          <strong>还原为默认（不使用 LOGO）</strong>
+          <small>勾选后保存会清空当前 LOGO，恢复为无 LOGO 状态。</small>
+        </span>
+      </label>
 
       <label className="checkbox-row" htmlFor="allowGuestUpload">
         <input defaultChecked={allowGuestUpload} id="allowGuestUpload" name="allowGuestUpload" type="checkbox" />

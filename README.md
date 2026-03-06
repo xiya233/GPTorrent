@@ -20,6 +20,11 @@
 - Bun 运行时 + 包管理器
 - mise 管理运行环境
 
+## 项目截图
+
+![首页](/docs/images/home.png)
+![种子详情](/docs/images/detail.png)
+
 ## 环境准备
 
 ```bash

@@ -10,6 +10,7 @@ import {
   updateTorrentByOwner,
 } from "@/lib/db";
 import { saveUploadedImageAsWebp } from "@/lib/image-upload";
+import { redirectRelative } from "@/lib/http/redirect";
 import { parseTagsInput, validateTags } from "@/lib/tags";
 
 const MAX_IMAGE_COUNT = 9;
@@ -128,5 +129,5 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   const redirectTo = `/torrent/${torrentId}`;
-  return NextResponse.redirect(new URL(redirectTo, request.url), 303);
+  return redirectRelative(redirectTo, 303);
 }

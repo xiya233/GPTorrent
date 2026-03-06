@@ -30,6 +30,7 @@ export default async function AdminSitePage() {
           enableLoginCaptcha={settings.enableLoginCaptcha}
           enableRegisterCaptcha={settings.enableRegisterCaptcha}
           guestTorrentFileMaxMb={settings.guestTorrentFileMaxMb}
+          hasLogo={Boolean(branding.logoPath)}
           maxAvatarUploadMb={settings.maxAvatarUploadMb}
           maxTorrentImageUploadMb={settings.maxTorrentImageUploadMb}
           singleUserMode={settings.singleUserMode}

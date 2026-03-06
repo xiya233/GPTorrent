@@ -30,6 +30,7 @@ export async function adminUpdateSiteBrandingAction(
   const titleText = ((formData.get("titleText") as string | null) ?? "").trim();
   const descriptionText = ((formData.get("descriptionText") as string | null) ?? "").trim();
   const logoFile = formData.get("logoFile");
+  const restoreLogo = formData.get("restoreLogo") === "on";
   const singleUserMode = formData.get("singleUserMode") === "on";
   const allowGuestUpload = formData.get("allowGuestUpload") === "on";
   const allowUserDeleteTorrent = formData.get("allowUserDeleteTorrent") === "on";
@@ -68,6 +69,8 @@ export async function adminUpdateSiteBrandingAction(
     }
 
     logoPath = saved.relativePath;
+  } else if (restoreLogo) {
+    logoPath = "";
   }
 
   updateSiteSettings({
