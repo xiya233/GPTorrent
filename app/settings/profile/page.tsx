@@ -29,7 +29,12 @@ export default async function ProfilePage() {
         </div>
       </section>
 
-      <ProfileForms bio={user.bio} maxAvatarUploadMb={uploadPolicy.maxAvatarUploadMb} username={user.username} />
+      <ProfileForms
+        bio={user.bio}
+        isProfilePublic={user.is_profile_public === 1}
+        maxAvatarUploadMb={uploadPolicy.maxAvatarUploadMb}
+        username={user.username}
+      />
     </div>
   );
 }

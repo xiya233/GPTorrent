@@ -114,6 +114,10 @@ export default async function TorrentDetailPage({ params }: TorrentDetailPagePro
       : null;
 
   const uploaderName = detail.torrent.is_anonymous === 1 ? "匿名用户" : detail.torrent.uploader_name;
+  const uploaderProfileHref =
+    detail.torrent.is_anonymous === 0 && detail.torrent.uploader_user_id !== null && uploaderName && uploaderName !== "访客"
+      ? `/u/${encodeURIComponent(uploaderName)}`
+      : "";
 
   return (
     <div className="container page-content torrent-detail-page">
@@ -150,7 +154,15 @@ export default async function TorrentDetailPage({ params }: TorrentDetailPagePro
         </div>
         <div>
           <span>上传者</span>
-          <strong>{uploaderName}</strong>
+          <strong>
+            {uploaderProfileHref ? (
+              <Link className="uploader-profile-link" href={uploaderProfileHref}>
+                {uploaderName}
+              </Link>
+            ) : (
+              uploaderName
+            )}
+          </strong>
         </div>
         <div>
           <span>大小</span>

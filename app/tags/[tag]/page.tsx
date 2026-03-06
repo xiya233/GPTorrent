@@ -28,7 +28,7 @@ export default async function TagDetailPage({ params }: TagPageProps) {
     <div className="container page-content">
       <div className="page-heading-row">
         <h1>标签：{normalized}</h1>
-        <Link className="secondary-btn" href="/tags">
+        <Link className="primary-btn" href="/tags">
           返回标签
         </Link>
       </div>

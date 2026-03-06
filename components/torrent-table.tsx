@@ -82,6 +82,17 @@ function getUploaderName(row: TorrentRow) {
   return row.uploader_name || "访客";
 }
 
+function getUploaderProfileHref(row: TorrentRow) {
+  if (row.is_anonymous === 1 || row.uploader_user_id === null) {
+    return "";
+  }
+  const name = getUploaderName(row);
+  if (!name || name === "访客" || name === "匿名用户") {
+    return "";
+  }
+  return `/u/${encodeURIComponent(name)}`;
+}
+
 export function TorrentTable({ torrents, emptyText = "没有匹配的种子" }: TorrentTableProps) {
   return (
     <section className="card table-card">
@@ -126,7 +137,13 @@ export function TorrentTable({ torrents, emptyText = "没有匹配的种子" }: 
                     </div>
                   </td>
                   <td className="muted uploader-name torrent-col-uploader" title={getUploaderName(row)}>
-                    {getUploaderName(row)}
+                    {getUploaderProfileHref(row) ? (
+                      <Link className="uploader-profile-link" href={getUploaderProfileHref(row)}>
+                        {getUploaderName(row)}
+                      </Link>
+                    ) : (
+                      getUploaderName(row)
+                    )}
                   </td>
                   <td className="align-center torrent-col-download">
                     <div className="action-icons">

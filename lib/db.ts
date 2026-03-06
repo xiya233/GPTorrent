@@ -218,6 +218,7 @@ export type AuthUser = {
   username: string;
   avatar_path: string;
   bio: string;
+  is_profile_public: number;
   role: UserRole;
   status: UserStatus;
   offline_quota_bytes: number;
@@ -238,6 +239,7 @@ export type SessionWithUser = {
   username: string;
   avatar_path: string;
   bio: string;
+  is_profile_public: number;
   role: UserRole;
   status: UserStatus;
   offline_quota_bytes: number;
@@ -346,6 +348,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   avatar_path TEXT NOT NULL DEFAULT '',
   bio TEXT NOT NULL DEFAULT '',
+  is_profile_public INTEGER NOT NULL DEFAULT 1,
   offline_quota_bytes INTEGER NOT NULL DEFAULT 10737418240,
   role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('user', 'admin')),
   status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'banned', 'deleted')),
@@ -524,6 +527,11 @@ ensureColumn("torrents", "deleted_at", "ALTER TABLE torrents ADD COLUMN deleted_
 ensureColumn("torrents", "deleted_by_user_id", "ALTER TABLE torrents ADD COLUMN deleted_by_user_id INTEGER");
 ensureColumn("torrents", "assets_cleaned_at", "ALTER TABLE torrents ADD COLUMN assets_cleaned_at TEXT");
 ensureColumn("torrents", "updated_at", "ALTER TABLE torrents ADD COLUMN updated_at TEXT");
+ensureColumn(
+  "users",
+  "is_profile_public",
+  "ALTER TABLE users ADD COLUMN is_profile_public INTEGER NOT NULL DEFAULT 1",
+);
 ensureColumn(
   "users",
   "offline_quota_bytes",
@@ -963,6 +971,59 @@ export function listMyTorrents(userId: number) {
     .all(userId);
 
   return rows as TorrentRow[];
+}
+
+export function listUserPublicTorrents(userId: number, limit = 120) {
+  const safeLimit = Math.min(Math.max(limit, 1), 300);
+  const rows = db
+    .query(
+      `
+      SELECT *
+      FROM torrents
+      WHERE uploader_user_id = ?
+        AND is_anonymous = 0
+        AND status = 'active'
+      ORDER BY datetime(created_at) DESC, id DESC
+      LIMIT ?
+      `,
+    )
+    .all(userId, safeLimit);
+
+  return rows as TorrentRow[];
+}
+
+export function getUserProfileByUsername(username: string) {
+  const normalized = username.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const user = db
+    .query(
+      "SELECT id, username, avatar_path, bio, is_profile_public, role, status, created_at, updated_at FROM users WHERE username = ? LIMIT 1",
+    )
+    .get(normalized) as
+    | {
+        id: number;
+        username: string;
+        avatar_path: string;
+        bio: string;
+        is_profile_public: number;
+        role: UserRole;
+        status: UserStatus;
+        created_at: string;
+        updated_at: string;
+      }
+    | null;
+
+  if (!user || user.status === "deleted") {
+    return null;
+  }
+
+  return {
+    user,
+    torrents: listUserPublicTorrents(user.id, 120),
+  };
 }
 
 export function listAdminTorrents(params: { q?: string; uploader?: string; status?: string } = {}) {
@@ -2680,6 +2741,7 @@ export function createUser(input: {
   status?: UserStatus;
   avatarPath?: string;
   bio?: string;
+  isProfilePublic?: boolean;
   offlineQuotaBytes?: number;
 }) {
   const now = new Date().toISOString();
@@ -2688,13 +2750,14 @@ export function createUser(input: {
   const offlineQuotaBytes = Math.max(1, Math.floor(input.offlineQuotaBytes ?? OFFLINE_DEFAULT_QUOTA_BYTES));
 
   db.query(`
-    INSERT INTO users (username, password_hash, avatar_path, bio, offline_quota_bytes, role, status, created_at, updated_at)
-    VALUES ($username, $passwordHash, $avatarPath, $bio, $offlineQuotaBytes, $role, $status, $createdAt, $updatedAt)
+    INSERT INTO users (username, password_hash, avatar_path, bio, is_profile_public, offline_quota_bytes, role, status, created_at, updated_at)
+    VALUES ($username, $passwordHash, $avatarPath, $bio, $isProfilePublic, $offlineQuotaBytes, $role, $status, $createdAt, $updatedAt)
   `).run({
     $username: input.username,
     $passwordHash: input.passwordHash,
     $avatarPath: input.avatarPath ?? "",
     $bio: input.bio ?? "",
+    $isProfilePublic: input.isProfilePublic === false ? 0 : 1,
     $offlineQuotaBytes: offlineQuotaBytes,
     $role: role,
     $status: status,
@@ -2718,7 +2781,9 @@ export function getUserById(userId: number) {
 
 export function getAuthUserById(userId: number) {
   const row = db
-    .query("SELECT id, username, avatar_path, bio, role, status, offline_quota_bytes FROM users WHERE id = ? LIMIT 1")
+    .query(
+      "SELECT id, username, avatar_path, bio, is_profile_public, role, status, offline_quota_bytes FROM users WHERE id = ? LIMIT 1",
+    )
     .get(userId);
   return (row as AuthUser | null) ?? null;
 }
@@ -2729,7 +2794,7 @@ export function listUsers(params: { q?: string; status?: UserStatus | "" } = {})
 
   const rows = db
     .query(`
-      SELECT id, username, avatar_path, bio, role, status, offline_quota_bytes, created_at, updated_at
+      SELECT id, username, avatar_path, bio, is_profile_public, role, status, offline_quota_bytes, created_at, updated_at
       FROM users
       WHERE ($q = '' OR username LIKE '%' || $q || '%')
         AND ($status = '' OR status = $status)
@@ -2746,11 +2811,28 @@ export function listUsers(params: { q?: string; status?: UserStatus | "" } = {})
   >;
 }
 
-export function updateUserProfile(userId: number, input: { bio: string; avatarPath?: string }) {
+export function updateUserProfile(userId: number, input: { bio: string; avatarPath?: string; isProfilePublic?: boolean }) {
+  const profilePublic = typeof input.isProfilePublic === "boolean" ? (input.isProfilePublic ? 1 : 0) : undefined;
+
   if (typeof input.avatarPath === "string") {
-    db.query("UPDATE users SET bio = ?, avatar_path = ?, updated_at = ? WHERE id = ?").run(
+    if (typeof profilePublic === "number") {
+      db.query("UPDATE users SET bio = ?, avatar_path = ?, is_profile_public = ?, updated_at = ? WHERE id = ?").run(
+        input.bio,
+        input.avatarPath,
+        profilePublic,
+        new Date().toISOString(),
+        userId,
+      );
+      return;
+    }
+    db.query("UPDATE users SET bio = ?, avatar_path = ?, updated_at = ? WHERE id = ?").run(input.bio, input.avatarPath, new Date().toISOString(), userId);
+    return;
+  }
+
+  if (typeof profilePublic === "number") {
+    db.query("UPDATE users SET bio = ?, is_profile_public = ?, updated_at = ? WHERE id = ?").run(
       input.bio,
-      input.avatarPath,
+      profilePublic,
       new Date().toISOString(),
       userId,
     );
@@ -2824,6 +2906,7 @@ export function getSessionWithUserByTokenHash(tokenHash: string) {
         u.username,
         u.avatar_path,
         u.bio,
+        u.is_profile_public,
         u.role,
         u.status,
         u.offline_quota_bytes

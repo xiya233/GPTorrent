@@ -11,6 +11,7 @@ import {
 type ProfileFormsProps = {
   username: string;
   bio: string;
+  isProfilePublic: boolean;
   maxAvatarUploadMb: number;
 };
 
@@ -58,7 +59,7 @@ async function createCroppedAvatarFile(imageSrc: string, pixelCrop: Area): Promi
   return new File([blob], "avatar-cropped.png", { type: "image/png" });
 }
 
-export function ProfileForms({ username, bio, maxAvatarUploadMb }: ProfileFormsProps) {
+export function ProfileForms({ username, bio, isProfilePublic, maxAvatarUploadMb }: ProfileFormsProps) {
   const initialState: ProfileActionState = {
     error: null,
     success: null,
@@ -230,6 +231,14 @@ export function ProfileForms({ username, bio, maxAvatarUploadMb }: ProfileFormsP
             <textarea defaultValue={bio} id="bio" name="bio" rows={6} />
             <small>最多 300 字</small>
           </div>
+
+          <label className="checkbox-row" htmlFor="isProfilePublic">
+            <input defaultChecked={isProfilePublic} id="isProfilePublic" name="isProfilePublic" type="checkbox" />
+            <span>
+              <strong>公开个人资料页面</strong>
+              <small>关闭后，其他用户将无法查看你的资料页。</small>
+            </span>
+          </label>
 
           {avatarClientError ? <p className="form-error">{avatarClientError}</p> : null}
           {profileState.error ? <p className="form-error">{profileState.error}</p> : null}

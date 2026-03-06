@@ -94,6 +94,7 @@ export function getUserStateFromToken(token?: string | null) {
       username: session.username,
       avatar_path: session.avatar_path,
       bio: session.bio,
+      is_profile_public: session.is_profile_public,
       role: session.role,
       status: session.status,
       offline_quota_bytes: session.offline_quota_bytes,

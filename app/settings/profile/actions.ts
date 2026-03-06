@@ -20,6 +20,7 @@ export async function updateProfileAction(
   const user = await requireActiveUser();
   const uploadPolicy = getUploadPolicy();
   const bio = ((formData.get("bio") as string | null) ?? "").trim();
+  const isProfilePublic = formData.get("isProfilePublic") === "on";
   const avatar = formData.get("avatarFile");
 
   if (bio.length > 300) {
@@ -51,10 +52,15 @@ export async function updateProfileAction(
   updateUserProfile(user.id, {
     bio,
     avatarPath,
+    isProfilePublic,
   });
 
   revalidatePath("/");
   revalidatePath("/settings/profile");
+  revalidatePath(`/u/${encodeURIComponent(user.username)}`);
+  revalidatePath("/categories/[category]", "page");
+  revalidatePath("/tags/[tag]", "page");
+  revalidatePath("/torrent/[id]", "page");
 
   return { error: null, success: "资料已更新" };
 }

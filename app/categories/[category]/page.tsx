@@ -39,9 +39,14 @@ export default async function CategoryDetailPage({ params, searchParams }: Categ
     <div className="container page-content">
       <div className="page-heading-row">
         <h1>分类：{normalized}</h1>
-        <Link className="secondary-btn" href="/categories">
-          返回分类
-        </Link>
+        <div className="page-heading-actions">
+          <Link className="primary-btn" href={`/rss.xml?category=${encodeURIComponent(normalized)}`}>
+            RSS 订阅（本分类）
+          </Link>
+          <Link className="primary-btn" href="/categories">
+            返回分类
+          </Link>
+        </div>
       </div>
 
       {trustedOnly ? <p className="filter-hint">当前筛选：仅信任</p> : null}

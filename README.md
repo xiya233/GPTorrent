@@ -11,6 +11,8 @@
 - 管理员种子管理（查看全站种子并删除任意记录）
 - 信任种子（管理员可在种子管理页设为/取消信任，前台支持“仅信任”筛选）
 - 分类页与标签页（分类总览/分类列表、标签总览/标签列表）
+- RSS 订阅（`/rss.xml` 全量订阅，`/rss.xml?category=动画` 按分类订阅）
+- 个人资料页（`/u/{username}`，可在账号设置中选择是否公开；管理员可查看私密资料页）
 - 登录/注册验证码（后台可分别开关）
 - 用户注册开关（后台可关闭公开注册）
 - 头像裁剪（1:1）与头像 WebP 自动转码
@@ -134,3 +136,8 @@ export TORRENT_CLEANUP_RETENTION_DAYS=7
 - 头像文件：`data/avatars/`
 - 站点 LOGO：`data/site/`
 - 验证码挑战：`captcha_challenges`（SQLite 表）
+
+## RSS 使用
+
+- 全部种子：`/rss.xml`
+- 按分类：`/rss.xml?category=分类名`（例如 `category=动画`）

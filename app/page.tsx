@@ -21,9 +21,14 @@ export default async function Home({ searchParams }: HomePageProps) {
     <div className="container page-content">
       <div className="page-heading-row">
         <h1>最近更新</h1>
-        <Link className="primary-btn" href="/upload">
-          上传种子
-        </Link>
+        <div className="page-heading-actions">
+          <Link className="primary-btn" href="/rss.xml">
+            RSS 订阅
+          </Link>
+          <Link className="primary-btn" href="/upload">
+            上传种子
+          </Link>
+        </div>
       </div>
 
       {(q || category || trustedOnly) && (

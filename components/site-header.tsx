@@ -47,6 +47,9 @@ export async function SiteHeader() {
           <Link className="nav-link" href="/upload">
             上传
           </Link>
+          <Link className="nav-link" href="/rss.xml">
+            RSS
+          </Link>
         </nav>
 
         <form action="/" className="search-bar" method="GET">

@@ -223,6 +223,14 @@ a {
   letter-spacing: -0.02em;
 }
 
+.page-heading-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .card {
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -1604,6 +1612,16 @@ tbody tr:last-child td {
 
 .uploader-name {
   min-width: 90px;
+}
+
+.uploader-profile-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.uploader-profile-link:hover {
+  color: var(--text-primary);
 }
 
 .hint-text {

@@ -23,7 +23,7 @@ export default async function UploadPage() {
     <div className="container page-content upload-page">
       <div className="page-heading-row">
         <h1>上传种子</h1>
-        <Link className="back-link" href="/">
+        <Link className="primary-btn" href="/">
           返回列表
         </Link>
       </div>

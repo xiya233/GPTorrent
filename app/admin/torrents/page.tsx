@@ -24,7 +24,7 @@ export default async function AdminTorrentsPage({ searchParams }: AdminTorrentsP
     <div className="container page-content admin-page">
       <div className="page-heading-row">
         <h1>管理员面板 / 种子管理</h1>
-        <Link className="secondary-btn" href="/admin">
+        <Link className="primary-btn" href="/admin">
           返回后台首页
         </Link>
       </div>

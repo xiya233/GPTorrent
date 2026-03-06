@@ -40,7 +40,7 @@ export default async function AdminOfflinePage({ searchParams }: AdminOfflinePag
     <div className="container page-content admin-page">
       <div className="page-heading-row">
         <h1>管理员面板 / 离线任务总览</h1>
-        <Link className="secondary-btn" href="/admin">
+        <Link className="primary-btn" href="/admin">
           返回后台首页
         </Link>
       </div>

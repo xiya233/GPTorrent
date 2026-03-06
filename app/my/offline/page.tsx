@@ -41,7 +41,7 @@ export default async function MyOfflinePage({ searchParams }: MyOfflinePageProps
           <option value="completed">completed</option>
           <option value="failed">failed</option>
         </select>
-        <button className="secondary-btn" type="submit">
+        <button className="primary-btn" type="submit">
           筛选
         </button>
       </form>
