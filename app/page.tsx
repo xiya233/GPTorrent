@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { TorrentTable } from "@/components/torrent-table";
+import { enforceSingleUserModeForGuestPage } from "@/lib/auth";
 import { listTorrents } from "@/lib/db";
 
 type HomePageProps = {
@@ -11,6 +12,7 @@ type HomePageProps = {
 };
 
 export default async function Home({ searchParams }: HomePageProps) {
+  await enforceSingleUserModeForGuestPage();
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
   const category = params.category?.trim() ?? "";

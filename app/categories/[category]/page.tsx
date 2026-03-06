@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TorrentTable } from "@/components/torrent-table";
+import { enforceSingleUserModeForGuestPage } from "@/lib/auth";
 import { isValidTorrentCategory } from "@/lib/categories";
 import { listTorrents } from "@/lib/db";
 
@@ -14,6 +15,7 @@ type CategoryPageProps = {
 };
 
 export default async function CategoryDetailPage({ params, searchParams }: CategoryPageProps) {
+  await enforceSingleUserModeForGuestPage();
   const { category } = await params;
   const search = await searchParams;
   const trustedOnly = search.trusted?.trim() === "1";

@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { TorrentTable } from "@/components/torrent-table";
-import { getCurrentUser } from "@/lib/auth";
+import { enforceSingleUserModeForGuestPage, getCurrentUser } from "@/lib/auth";
 import { getUserProfileByUsername } from "@/lib/db";
 import { toMediaUrl } from "@/lib/media-url";
 
@@ -12,6 +12,7 @@ type UserProfilePageProps = {
 };
 
 export default async function UserProfilePage({ params }: UserProfilePageProps) {
+  await enforceSingleUserModeForGuestPage();
   const { username } = await params;
   let decoded = username;
   try {
@@ -76,4 +77,3 @@ export default async function UserProfilePage({ params }: UserProfilePageProps) 
     </div>
   );
 }
-

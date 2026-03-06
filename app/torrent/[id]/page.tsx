@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { MagnetCopyButton } from "@/components/magnet-copy-button";
 import { OfflineStartButton } from "@/components/offline-start-button";
 import { TorrentImageGallery } from "@/components/torrent-image-gallery";
-import { getCurrentUser } from "@/lib/auth";
+import { enforceSingleUserModeForGuestPage, getCurrentUser } from "@/lib/auth";
 import {
   getOfflineJobDetailByTorrentId,
   getSiteFeatureFlags,
@@ -86,6 +86,7 @@ function createOfflineFileMap(
 }
 
 export default async function TorrentDetailPage({ params }: TorrentDetailPageProps) {
+  await enforceSingleUserModeForGuestPage();
   const { id } = await params;
   const torrentId = Number(id);
   if (!Number.isInteger(torrentId) || torrentId <= 0) {

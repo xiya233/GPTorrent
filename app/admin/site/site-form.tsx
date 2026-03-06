@@ -9,6 +9,7 @@ import {
 type SiteFormProps = {
   titleText: string;
   descriptionText: string;
+  singleUserMode: boolean;
   allowGuestUpload: boolean;
   allowUserDeleteTorrent: boolean;
   allowUserRegister: boolean;
@@ -24,6 +25,7 @@ type SiteFormProps = {
 export function SiteForm({
   titleText,
   descriptionText,
+  singleUserMode,
   allowGuestUpload,
   allowUserDeleteTorrent,
   allowUserRegister,
@@ -76,7 +78,9 @@ export function SiteForm({
         <input defaultChecked={allowGuestUpload} id="allowGuestUpload" name="allowGuestUpload" type="checkbox" />
         <span>
           <strong>允许访客上传</strong>
-          <small>关闭后，未登录用户将不能上传种子。</small>
+          <small>
+            关闭后，未登录用户将不能上传种子。{singleUserMode ? "（单用户模式启用时该项会被强制关闭）" : ""}
+          </small>
         </span>
       </label>
 
@@ -110,7 +114,17 @@ export function SiteForm({
         <input defaultChecked={allowUserRegister} id="allowUserRegister" name="allowUserRegister" type="checkbox" />
         <span>
           <strong>允许用户注册</strong>
-          <small>关闭后，访客将无法创建新账号。</small>
+          <small>
+            关闭后，访客将无法创建新账号。{singleUserMode ? "（单用户模式启用时该项会被强制关闭）" : ""}
+          </small>
+        </span>
+      </label>
+
+      <label className="checkbox-row" htmlFor="singleUserMode">
+        <input defaultChecked={singleUserMode} id="singleUserMode" name="singleUserMode" type="checkbox" />
+        <span>
+          <strong>启用单用户模式</strong>
+          <small>启用后将强制关闭访客上传与用户注册，未登录访问种子内容会跳转登录。</small>
         </span>
       </label>
 

@@ -256,6 +256,7 @@ export type SiteFeatureFlags = {
   allowUserDeleteTorrent: boolean;
   allowGuestTorrentImageUpload: boolean;
   allowUserRegister: boolean;
+  singleUserMode: boolean;
 };
 
 export type UploadPolicy = {
@@ -370,6 +371,7 @@ CREATE TABLE IF NOT EXISTS site_settings (
   id INTEGER PRIMARY KEY CHECK(id = 1),
   title_text TEXT NOT NULL DEFAULT 'Sukebei.dl',
   logo_path TEXT NOT NULL DEFAULT '',
+  single_user_mode INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL
 );
 
@@ -536,6 +538,11 @@ ensureColumn(
   "users",
   "offline_quota_bytes",
   `ALTER TABLE users ADD COLUMN offline_quota_bytes INTEGER NOT NULL DEFAULT ${OFFLINE_DEFAULT_QUOTA_BYTES}`,
+);
+ensureColumn(
+  "site_settings",
+  "single_user_mode",
+  "ALTER TABLE site_settings ADD COLUMN single_user_mode INTEGER NOT NULL DEFAULT 0",
 );
 ensureColumn(
   "site_settings",
@@ -2971,13 +2978,14 @@ export function deleteExpiredCaptchaChallenges(nowIso: string) {
 export function getSiteSettings(): SiteSettings {
   const row = db
     .query(
-      "SELECT title_text AS titleText, logo_path AS logoPath, description_text AS descriptionText, allow_guest_upload AS allowGuestUpload, allow_user_delete_torrent AS allowUserDeleteTorrent, enable_login_captcha AS enableLoginCaptcha, enable_register_captcha AS enableRegisterCaptcha, max_avatar_upload_mb AS maxAvatarUploadMb, max_torrent_image_upload_mb AS maxTorrentImageUploadMb, allow_guest_torrent_image_upload AS allowGuestTorrentImageUpload, guest_torrent_file_max_mb AS guestTorrentFileMaxMb, user_torrent_file_max_mb AS userTorrentFileMaxMb, allow_user_register AS allowUserRegister FROM site_settings WHERE id = 1",
+      "SELECT title_text AS titleText, logo_path AS logoPath, description_text AS descriptionText, single_user_mode AS singleUserMode, allow_guest_upload AS allowGuestUpload, allow_user_delete_torrent AS allowUserDeleteTorrent, enable_login_captcha AS enableLoginCaptcha, enable_register_captcha AS enableRegisterCaptcha, max_avatar_upload_mb AS maxAvatarUploadMb, max_torrent_image_upload_mb AS maxTorrentImageUploadMb, allow_guest_torrent_image_upload AS allowGuestTorrentImageUpload, guest_torrent_file_max_mb AS guestTorrentFileMaxMb, user_torrent_file_max_mb AS userTorrentFileMaxMb, allow_user_register AS allowUserRegister FROM site_settings WHERE id = 1",
     )
     .get() as
     | {
         titleText: string;
         logoPath: string;
         descriptionText: string;
+        singleUserMode: number;
         allowGuestUpload: number;
         allowUserDeleteTorrent: number;
         enableLoginCaptcha: number;
@@ -2996,6 +3004,7 @@ export function getSiteSettings(): SiteSettings {
       titleText: "Sukebei.dl",
       logoPath: "",
       descriptionText: "",
+      singleUserMode: false,
       allowGuestUpload: true,
       allowUserDeleteTorrent: true,
       enableLoginCaptcha: true,
@@ -3013,6 +3022,7 @@ export function getSiteSettings(): SiteSettings {
     titleText: row.titleText,
     logoPath: row.logoPath,
     descriptionText: row.descriptionText,
+    singleUserMode: row.singleUserMode === 1,
     allowGuestUpload: row.allowGuestUpload === 1,
     allowUserDeleteTorrent: row.allowUserDeleteTorrent === 1,
     enableLoginCaptcha: row.enableLoginCaptcha === 1,
@@ -3037,11 +3047,13 @@ export function getSiteBranding(): SiteBranding {
 
 export function getSiteFeatureFlags(): SiteFeatureFlags {
   const s = getSiteSettings();
+  const singleUserMode = s.singleUserMode;
   return {
-    allowGuestUpload: s.allowGuestUpload,
+    allowGuestUpload: singleUserMode ? false : s.allowGuestUpload,
     allowUserDeleteTorrent: s.allowUserDeleteTorrent,
     allowGuestTorrentImageUpload: s.allowGuestTorrentImageUpload,
-    allowUserRegister: s.allowUserRegister,
+    allowUserRegister: singleUserMode ? false : s.allowUserRegister,
+    singleUserMode,
   };
 }
 
@@ -3068,6 +3080,7 @@ export function updateSiteSettings(input: {
   titleText: string;
   descriptionText?: string;
   logoPath?: string;
+  singleUserMode?: boolean;
   allowGuestUpload?: boolean;
   allowUserDeleteTorrent?: boolean;
   enableLoginCaptcha?: boolean;
@@ -3085,6 +3098,8 @@ export function updateSiteSettings(input: {
   const descriptionText =
     typeof input.descriptionText === "string" ? input.descriptionText : current.descriptionText;
   const logoPath = typeof input.logoPath === "string" ? input.logoPath : current.logoPath;
+  const singleUserMode =
+    typeof input.singleUserMode === "boolean" ? input.singleUserMode : current.singleUserMode;
   const allowGuestUpload =
     typeof input.allowGuestUpload === "boolean" ? input.allowGuestUpload : current.allowGuestUpload;
   const allowUserDeleteTorrent =
@@ -3118,11 +3133,12 @@ export function updateSiteSettings(input: {
     typeof input.allowUserRegister === "boolean" ? input.allowUserRegister : current.allowUserRegister;
 
   db.query(
-    "UPDATE site_settings SET title_text = ?, logo_path = ?, description_text = ?, allow_guest_upload = ?, allow_user_delete_torrent = ?, enable_login_captcha = ?, enable_register_captcha = ?, max_avatar_upload_mb = ?, max_torrent_image_upload_mb = ?, allow_guest_torrent_image_upload = ?, guest_torrent_file_max_mb = ?, user_torrent_file_max_mb = ?, allow_user_register = ?, updated_at = ? WHERE id = 1",
+    "UPDATE site_settings SET title_text = ?, logo_path = ?, description_text = ?, single_user_mode = ?, allow_guest_upload = ?, allow_user_delete_torrent = ?, enable_login_captcha = ?, enable_register_captcha = ?, max_avatar_upload_mb = ?, max_torrent_image_upload_mb = ?, allow_guest_torrent_image_upload = ?, guest_torrent_file_max_mb = ?, user_torrent_file_max_mb = ?, allow_user_register = ?, updated_at = ? WHERE id = 1",
   ).run(
     titleText,
     logoPath,
     descriptionText,
+    singleUserMode ? 1 : 0,
     allowGuestUpload ? 1 : 0,
     allowUserDeleteTorrent ? 1 : 0,
     enableLoginCaptcha ? 1 : 0,

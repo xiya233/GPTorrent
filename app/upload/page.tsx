@@ -2,7 +2,7 @@ import Link from "next/link";
 import { CircleAlert } from "lucide-react";
 import { redirect } from "next/navigation";
 import { UploadForm } from "@/app/upload/upload-form";
-import { getCurrentUserState } from "@/lib/auth";
+import { enforceSingleUserModeForGuestPage } from "@/lib/auth";
 import { getUploadPolicy, getSiteFeatureFlags } from "@/lib/db";
 
 const uploadRules = [
@@ -13,7 +13,7 @@ const uploadRules = [
 ];
 
 export default async function UploadPage() {
-  const { user, blocked } = await getCurrentUserState();
+  const { user, blocked } = await enforceSingleUserModeForGuestPage();
   const [flags, policy] = [getSiteFeatureFlags(), getUploadPolicy()];
   if (blocked) {
     redirect("/auth/login");

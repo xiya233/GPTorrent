@@ -1,3 +1,5 @@
+import { NextRequest, NextResponse } from "next/server";
+import { isSingleUserModeGuestBlockedFromRequest } from "@/lib/auth";
 import { isValidTorrentCategory } from "@/lib/categories";
 import { getSiteBranding, listTorrents } from "@/lib/db";
 
@@ -24,7 +26,11 @@ function toRfc1123(value: string) {
   return date.toUTCString();
 }
 
-export function GET(request: Request) {
+export function GET(request: NextRequest) {
+  if (isSingleUserModeGuestBlockedFromRequest(request)) {
+    return NextResponse.redirect(new URL("/auth/login", request.url), 307);
+  }
+
   const url = new URL(request.url);
   const categoryRaw = (url.searchParams.get("category") ?? "").trim();
   const category = categoryRaw;

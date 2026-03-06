@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { enforceSingleUserModeForGuestPage } from "@/lib/auth";
 import { listCategoryStats } from "@/lib/db";
 
-export default function CategoriesPage() {
+export default async function CategoriesPage() {
+  await enforceSingleUserModeForGuestPage();
   const categories = listCategoryStats();
 
   return (

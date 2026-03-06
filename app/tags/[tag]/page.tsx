@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TorrentTable } from "@/components/torrent-table";
+import { enforceSingleUserModeForGuestPage } from "@/lib/auth";
 import { listTorrentsByTag } from "@/lib/db";
 
 type TagPageProps = {
@@ -10,6 +11,7 @@ type TagPageProps = {
 };
 
 export default async function TagDetailPage({ params }: TagPageProps) {
+  await enforceSingleUserModeForGuestPage();
   const { tag } = await params;
   let decoded = tag;
   try {

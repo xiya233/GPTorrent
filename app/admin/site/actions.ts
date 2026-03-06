@@ -30,6 +30,7 @@ export async function adminUpdateSiteBrandingAction(
   const titleText = ((formData.get("titleText") as string | null) ?? "").trim();
   const descriptionText = ((formData.get("descriptionText") as string | null) ?? "").trim();
   const logoFile = formData.get("logoFile");
+  const singleUserMode = formData.get("singleUserMode") === "on";
   const allowGuestUpload = formData.get("allowGuestUpload") === "on";
   const allowUserDeleteTorrent = formData.get("allowUserDeleteTorrent") === "on";
   const allowGuestTorrentImageUpload = formData.get("allowGuestTorrentImageUpload") === "on";
@@ -73,6 +74,7 @@ export async function adminUpdateSiteBrandingAction(
     titleText,
     descriptionText,
     logoPath,
+    singleUserMode,
     allowGuestUpload,
     allowUserDeleteTorrent,
     allowGuestTorrentImageUpload,
@@ -86,6 +88,10 @@ export async function adminUpdateSiteBrandingAction(
   });
 
   revalidatePath("/");
+  revalidatePath("/auth/register");
+  revalidatePath("/upload");
+  revalidatePath("/categories");
+  revalidatePath("/tags");
   revalidatePath("/admin/site");
 
   return { error: null, success: "站点配置已更新" };

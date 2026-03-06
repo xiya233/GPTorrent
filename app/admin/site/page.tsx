@@ -32,6 +32,7 @@ export default async function AdminSitePage() {
           guestTorrentFileMaxMb={settings.guestTorrentFileMaxMb}
           maxAvatarUploadMb={settings.maxAvatarUploadMb}
           maxTorrentImageUploadMb={settings.maxTorrentImageUploadMb}
+          singleUserMode={settings.singleUserMode}
           titleText={branding.titleText}
           userTorrentFileMaxMb={settings.userTorrentFileMaxMb}
         />

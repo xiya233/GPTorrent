@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { enforceSingleUserModeForGuestPage } from "@/lib/auth";
 import { listTagStats } from "@/lib/db";
 
-export default function TagsPage() {
+export default async function TagsPage() {
+  await enforceSingleUserModeForGuestPage();
   const tags = listTagStats();
 
   return (

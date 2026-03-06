@@ -2,15 +2,19 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { AuthForm } from "@/components/auth-form";
 import { getCurrentUser } from "@/lib/auth";
-import { getSiteSettings } from "@/lib/db";
+import { getSiteFeatureFlags, getSiteSettings } from "@/lib/db";
 
 export default async function RegisterPage() {
-  const [user, settings] = await Promise.all([getCurrentUser(), Promise.resolve(getSiteSettings())]);
+  const [user, settings, flags] = await Promise.all([
+    getCurrentUser(),
+    Promise.resolve(getSiteSettings()),
+    Promise.resolve(getSiteFeatureFlags()),
+  ]);
   if (user) {
     redirect("/");
   }
 
-  if (!settings.allowUserRegister) {
+  if (!flags.allowUserRegister) {
     return (
       <div className="container page-content auth-page">
         <div className="auth-form card">

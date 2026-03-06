@@ -2,6 +2,8 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { NextRequest, NextResponse } from "next/server";
+import { isSingleUserModeGuestBlockedFromRequest } from "@/lib/auth";
 import { getTorrentById } from "@/lib/db";
 
 function safeFileName(name: string) {
@@ -9,7 +11,11 @@ function safeFileName(name: string) {
   return base.endsWith(".torrent") ? base : `${base}.torrent`;
 }
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (isSingleUserModeGuestBlockedFromRequest(request)) {
+    return NextResponse.redirect(new URL("/auth/login", request.url), 307);
+  }
+
   const { id } = await params;
   const torrentId = Number(id);
 

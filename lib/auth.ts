@@ -1,11 +1,13 @@
 import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import type { NextRequest } from "next/server";
 import {
   createSession,
   deleteExpiredSessions,
   deleteSessionByTokenHash,
   getAuthUserById,
+  getSiteFeatureFlags,
   getSessionWithUserByTokenHash,
   type AuthUser,
 } from "@/lib/db";
@@ -111,6 +113,25 @@ export async function getCurrentUserState(): Promise<{ user: AuthUser | null; bl
     await clearSessionCookie();
   }
   return state;
+}
+
+export async function enforceSingleUserModeForGuestPage() {
+  const state = await getCurrentUserState();
+  const flags = getSiteFeatureFlags();
+  if (flags.singleUserMode && !state.user) {
+    redirect("/auth/login");
+  }
+  return state;
+}
+
+export function isSingleUserModeGuestBlockedFromRequest(request: NextRequest) {
+  const flags = getSiteFeatureFlags();
+  if (!flags.singleUserMode) {
+    return false;
+  }
+  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value ?? null;
+  const state = getUserStateFromToken(token);
+  return !state.user;
 }
 
 export async function requireActiveUser() {
