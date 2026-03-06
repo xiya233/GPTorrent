@@ -1,31 +1,21 @@
-# BT 种子上传分享网站
+# GPTorrent 多用户BT种子上传分享 离线下载 HLS转码 在线播放
 
-基于 Stitch 设计稿实现，当前能力：
+当前功能：
 - 首页（种子列表，支持搜索/分类）
-- 上传页（游客上传可开关、登录用户实名/匿名上传）
-- 用户系统（注册、登录、登出、会话）
-- 个人设置（头像、bio、修改密码）
-- 管理员面板（用户管理、站点 LOGO/标题、功能开关）
-- 种子详情页（描述、图片、文件列表、tracker统计）
-- 我的种子（编辑标题/标签/描述/图片、删除）
-- 管理员种子管理（查看全站种子并删除任意记录）
-- 信任种子（管理员可在种子管理页设为/取消信任，前台支持“仅信任”筛选）
-- 分类页与标签页（分类总览/分类列表、标签总览/标签列表）
+- 上传页面（访客上传、登录用户实名/匿名上传）
+- 用户系统（注册、登录、登出、头像、bio、修改密码）
+- 管理员面板（用户管理、种子管理、离线任务管理、站点配置）
+- 种子详情页（描述、截图、种子文件列表、Tracker统计）
+- 标签页（支持设置“信任种子”）
 - RSS 订阅（`/rss.xml` 全量订阅，`/rss.xml?category=动画` 按分类订阅）
 - 个人资料页（`/u/{username}`，可在账号设置中选择是否公开；管理员可查看私密资料页）
-- 登录/注册验证码（后台可分别开关）
-- 用户注册开关（后台可关闭公开注册）
-- 单用户模式（后台开关，启用后强制关闭访客上传与公开注册，未登录访问种子内容会跳转登录）
-- 头像裁剪（1:1）与头像 WebP 自动转码
-- 种子图片 WebP 自动转码与详情灯箱缩放
-- 上传策略配置（游客/用户种子大小、图片大小、游客图片开关）
-- 分类扩展（成人、其他）
+- 单用户模式（启用后强制关闭访客上传与公开注册，未登录访问种子内容会跳转登录）
 - 离线下载与在线播放（qBittorrent + FFmpeg + ArtPlayer，需启动 offline worker）
-- 离线任务中心（`/my/offline`，用户名下拉菜单入口）
 - 离线存储配额（默认每用户 10GB，管理员可在用户管理页调整）
-- 离线任务总览（`/admin/offline`，支持筛选与删除任务）
+
 
 技术栈：
+- 前端样式使用 Stitch 设计
 - Next.js App Router + Server Actions
 - SQLite（bun:sqlite）
 - Bun 运行时 + 包管理器
@@ -82,8 +72,8 @@ export QBITTORRENT_USERNAME='admin'
 export QBITTORRENT_PASSWORD='adminadmin'
 export OFFLINE_MAX_CONCURRENCY=2
 export OFFLINE_RETENTION_DAYS=7
-export FFMPEG_BIN='ffmpeg'
-export FFPROBE_BIN='ffprobe'
+export FFMPEG_BIN='/usr/bin/ffmpeg'
+export FFPROBE_BIN='/usr/bin/ffprobe'
 ```
 
 启动离线任务 worker：
@@ -93,17 +83,6 @@ mise exec bun -- bun run offline:worker
 # 单次执行并打印详细日志
 mise exec bun -- bun run offline:worker --once --verbose
 ```
-
-离线 worker 日志中的失败计数已拆分为：
-- `queued_failed`：排队阶段失败（如 qB 未启动、登录失败、配置错误）
-- `downloading_failed`：下载阶段失败
-- `failed_total`：总失败数
-
-在线播放页面使用 ArtPlayer，支持倍速、画中画、截图、快捷键与播放记忆。
-HLS 转码已支持多码率（默认 360p/720p/1080p，按源分辨率裁剪）；历史单码率视频会在播放时后台按需升级。
-视频在播放前会显示封面图（WebP）；封面采用多时间点智能抽帧，尽量规避黑屏首帧。
-历史视频会在首次进入播放页时后台按需补齐封面；播放页可手动“重选封面”。
-离线资源（下载/播放/HLS/封面）仅登录用户可访问，且默认仅任务拥有者可访问（管理员可访问全部）。
 
 清理过期离线资源：
 
@@ -158,4 +137,3 @@ export TORRENT_CLEANUP_RETENTION_DAYS=7
 - 总览：`deploy/README.md`
 - Debian 13 手动部署（Bun + systemd + 主机 Nginx + HTTPS）：`deploy/debian13-manual.md`
 - Docker Compose 部署（app + workers + qBittorrent + 主机 Nginx + HTTPS）：`deploy/docker-compose.md`
-- Docker 相关配置已内置：`Dockerfile`、`docker-compose.yml`、`.env.example`
