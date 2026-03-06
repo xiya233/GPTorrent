@@ -1,6 +1,6 @@
-# Docker Compose 部署（app + workers + qBittorrent + 主机 Nginx HTTPS）
+# Docker Compose 部署（仓库内置配置，含 FFmpeg）
 
-> 目标：通过一次 `docker compose up -d` 启动完整服务（Web、tracker worker、offline worker、cleanup、qBittorrent），再由主机 Nginx 反代并启用 HTTPS。
+> 目标：只要准备 `.env` 并执行 `docker compose up -d --build`，就能一次启动 Web、Tracker Worker、Offline Worker、Cleanup Worker、qBittorrent，且离线转码可直接使用 `ffmpeg/ffprobe`。
 
 ## 1. 前置条件
 
@@ -8,7 +8,7 @@
 2. 已安装 Docker Engine + Docker Compose Plugin
 3. 域名已解析到服务器公网 IP（示例：`bt.example.com`）
 4. 防火墙已放通 `80/443`（以及可选 BT 端口 `6881/tcp+udp`）
-5. 主机已安装 Nginx + Certbot（用于 HTTPS）
+5. 主机已安装 Nginx + Certbot（用于 HTTPS，Nginx 不跑容器）
 
 ## 2. 安装 Docker / Compose（Debian）
 
@@ -31,7 +31,7 @@ sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin d
 sudo systemctl enable --now docker
 ```
 
-## 3. 准备目录与项目
+## 3. 拉取项目并准备目录
 
 ```bash
 sudo mkdir -p /opt/btshare
@@ -40,169 +40,39 @@ cd /opt/btshare
 
 git clone <你的仓库地址> app
 cd app
+
+mkdir -p data deploy/qb/config
 ```
 
-## 4. 创建生产环境变量文件（Compose 专用）
+## 4. 配置环境变量（根目录 `.env`）
 
-创建 `deploy/.env.prod`：
+仓库已提供 `.env.example`，复制后按需修改：
 
 ```bash
-mkdir -p deploy deploy/qb/config data
-cat > deploy/.env.prod <<'ENV'
-NODE_ENV=production
-PORT=3000
-
-# 可选：首次创建管理员
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=ChangeMe_123456
-
-# qBittorrent（容器内服务名）
-QBITTORRENT_URL=http://qbittorrent:8080
-QBITTORRENT_USERNAME=admin
-QBITTORRENT_PASSWORD=adminadmin
-
-# 离线/转码
-OFFLINE_MAX_CONCURRENCY=2
-OFFLINE_RETENTION_DAYS=7
-FFMPEG_BIN=ffmpeg
-FFPROBE_BIN=ffprobe
-
-# 可选
-TORRENT_CLEANUP_RETENTION_DAYS=7
-TZ=Asia/Shanghai
-ENV
+cp .env.example .env
 ```
 
-## 5. 创建生产 Dockerfile
+至少检查这些值：
 
-> 仓库若已有生产 Dockerfile，可直接复用并跳过本节。
+1. `QBITTORRENT_USERNAME`
+2. `QBITTORRENT_PASSWORD`
+3. `ADMIN_USERNAME` / `ADMIN_PASSWORD`（可选）
+4. `OFFLINE_MAX_CONCURRENCY`
+5. `OFFLINE_RETENTION_DAYS`
 
-在项目根目录创建 `Dockerfile`：
+## 5. 关键说明（FFmpeg 已内置）
 
-```dockerfile
-FROM oven/bun:1.3.10 AS builder
-WORKDIR /app
-COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile
-COPY . .
-RUN bun run build
+仓库已提供：
 
-FROM oven/bun:1.3.10 AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-COPY --from=builder /app /app
-EXPOSE 3000
-CMD ["bunx", "--bun", "next", "start", "-H", "0.0.0.0", "-p", "3000"]
-```
+1. 根目录 `Dockerfile`（多阶段构建）
+2. 根目录 `docker-compose.yml`（5 个服务）
 
-## 6. 创建 `docker-compose.yml`
+`Dockerfile` 的运行层通过 `apt` 安装了 `ffmpeg`，所以 `offline-worker` 无需依赖宿主机 ffmpeg。
 
-在项目根目录创建：
-
-```yaml
-services:
-  qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent:4.5.5
-    container_name: btshare-qb
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=${TZ:-Asia/Shanghai}
-      - WEBUI_PORT=8080
-    volumes:
-      - ./deploy/qb/config:/config
-      - ./data:/app/data
-    ports:
-      - "127.0.0.1:8080:8080"
-      - "6881:6881"
-      - "6881:6881/udp"
-    restart: unless-stopped
-
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: btshare-app:latest
-    container_name: btshare-app
-    env_file:
-      - ./deploy/.env.prod
-    environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - TZ=${TZ:-Asia/Shanghai}
-    depends_on:
-      - qbittorrent
-    command: ["bunx", "--bun", "next", "start", "-H", "0.0.0.0", "-p", "3000"]
-    volumes:
-      - ./data:/app/data
-    ports:
-      - "127.0.0.1:3000:3000"
-    restart: unless-stopped
-
-  tracker-worker:
-    image: btshare-app:latest
-    container_name: btshare-tracker-worker
-    env_file:
-      - ./deploy/.env.prod
-    environment:
-      - NODE_ENV=production
-      - TZ=${TZ:-Asia/Shanghai}
-    depends_on:
-      - app
-    command: ["bun", "run", "tracker:worker"]
-    volumes:
-      - ./data:/app/data
-    restart: unless-stopped
-
-  offline-worker:
-    image: btshare-app:latest
-    container_name: btshare-offline-worker
-    env_file:
-      - ./deploy/.env.prod
-    environment:
-      - NODE_ENV=production
-      - TZ=${TZ:-Asia/Shanghai}
-    depends_on:
-      - app
-      - qbittorrent
-    command: ["bun", "run", "offline:worker"]
-    volumes:
-      - ./data:/app/data
-    restart: unless-stopped
-
-  cleanup-worker:
-    image: btshare-app:latest
-    container_name: btshare-cleanup-worker
-    env_file:
-      - ./deploy/.env.prod
-    environment:
-      - NODE_ENV=production
-      - TZ=${TZ:-Asia/Shanghai}
-    depends_on:
-      - app
-    command:
-      - sh
-      - -lc
-      - |
-        while true; do
-          bun run offline:cleanup || true
-          bun run torrents:cleanup || true
-          sleep 86400
-        done
-    volumes:
-      - ./data:/app/data
-    restart: unless-stopped
-```
-
-说明：
-
-1. 这里固定 `qbittorrent` 镜像为 `4.5.5`，是为了和示例凭据 `admin/adminadmin` 保持一致，确保 `docker compose up -d` 后 worker 可直接连接。  
-2. 生产上线后请尽快在 qB WebUI 修改密码，并同步更新 `deploy/.env.prod` 里的 `QBITTORRENT_PASSWORD`，然后执行 `docker compose up -d` 使服务生效。
-
-## 7. 一键启动
+## 6. 一键启动
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
 查看状态：
@@ -210,9 +80,18 @@ docker compose up -d
 ```bash
 docker compose ps
 docker compose logs -f app
-docker compose logs -f offline-worker
 docker compose logs -f tracker-worker
+docker compose logs -f offline-worker
 ```
+
+## 7. 验证 FFmpeg / FFprobe 可用
+
+```bash
+docker compose exec app ffmpeg -version
+docker compose exec offline-worker ffprobe -version
+```
+
+如果两条命令都能输出版本号，说明转码依赖已就绪。
 
 ## 8. 主机 Nginx 反向代理（非容器）
 
@@ -266,52 +145,43 @@ sudo certbot --nginx -d bt.example.com
 sudo certbot renew --dry-run
 ```
 
-## 10. 首次上线检查
+## 10. 首次上线验收
 
-1. 打开 `https://bt.example.com`，能看到站点首页
-2. 登录并上传一个 `.torrent`，详情页可访问
-3. 创建离线任务，`offline-worker` 日志有推进
-4. tracker 数据可刷新（`tracker-worker` 有输出）
-5. qB WebUI 可从主机本地访问：`http://127.0.0.1:8080`
-
-若 qB 登录失败，可先执行：
-
-```bash
-docker compose logs -f qbittorrent
-```
-
-确认 qB 实际登录账号密码后，再同步 `deploy/.env.prod` 并重启服务。
+1. 打开 `https://bt.example.com`，首页可访问
+2. 能登录并上传 `.torrent`
+3. 能创建离线任务，`offline-worker` 有推进日志
+4. 打开视频时转码正常（不再报 `ffmpeg not found`）
 
 ## 11. 运维命令
 
 ```bash
-# 查看实时日志
+# 实时日志
 docker compose logs -f app
-docker compose logs -f offline-worker
 docker compose logs -f tracker-worker
+docker compose logs -f offline-worker
 docker compose logs -f qbittorrent
 
-# 重启单个服务
+# 重启服务
 docker compose restart app
 docker compose restart offline-worker
+docker compose restart tracker-worker
 
 # 升级（拉代码 -> 重建 -> 重启）
 git pull
-docker compose build --pull
-docker compose up -d
+docker compose up -d --build
 ```
 
-## 12. 备份建议（必须）
+## 12. 备份建议
 
-至少备份以下目录：
+至少备份以下目录/文件：
 
 1. `data/`（SQLite、上传文件、离线文件、HLS、头像、站点文件）
 2. `deploy/qb/config/`（qB 配置）
-3. `deploy/.env.prod`（注意脱敏和权限）
+3. `.env`（请妥善保管，不要提交到仓库）
 
 ## 13. 常见问题
 
-1. `qB 登录失败`：检查 `deploy/.env.prod` 的 `QBITTORRENT_*` 是否与 qB WebUI 账号一致。  
-2. `ffmpeg not found`：确保镜像内有 ffmpeg（本文 Dockerfile 基于 bun 官方镜像，需宿主能构建并在容器可执行）。  
-3. `502 Bad Gateway`：检查 `docker compose ps` 中 `app` 是否 healthy/running。  
-4. `HTTPS 失败`：检查 DNS 解析与 80 端口对外连通。
+1. `qB 登录失败`：检查 `.env` 中 `QBITTORRENT_*` 是否与 qB WebUI 一致。  
+2. `离线任务无法转码`：先执行 `docker compose exec offline-worker ffmpeg -version`。  
+3. `502 Bad Gateway`：检查 `docker compose ps` 中 `app` 是否运行。  
+4. `HTTPS 失败`：检查 DNS 和 80 端口连通性。

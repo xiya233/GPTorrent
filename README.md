@@ -158,3 +158,4 @@ export TORRENT_CLEANUP_RETENTION_DAYS=7
 - 总览：`deploy/README.md`
 - Debian 13 手动部署（Bun + systemd + 主机 Nginx + HTTPS）：`deploy/debian13-manual.md`
 - Docker Compose 部署（app + workers + qBittorrent + 主机 Nginx + HTTPS）：`deploy/docker-compose.md`
+- Docker 相关配置已内置：`Dockerfile`、`docker-compose.yml`、`.env.example`

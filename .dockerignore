@@ -1,0 +1,28 @@
+.git
+.gitignore
+.next
+node_modules
+data
+coverage
+.cache
+.eslintcache
+dist
+out
+
+# Local environment files
+.env
+.env.local
+.env.development.local
+.env.production.local
+
+# Keep template env file in image context if needed
+!.env.example
+
+# OS / editor noise
+.DS_Store
+.idea
+
+# Build/debug leftovers
+*.log
+*.tgz
+*.tsbuildinfo

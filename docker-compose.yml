@@ -1,0 +1,79 @@
+services:
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:4.5.5
+    container_name: btshare-qb
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ:-Asia/Shanghai}
+      - WEBUI_PORT=8080
+    volumes:
+      - ./deploy/qb/config:/config
+      - ./data:/app/data
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "6881:6881"
+      - "6881:6881/udp"
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: btshare-app:latest
+    container_name: btshare-app
+    env_file:
+      - ./.env
+    depends_on:
+      - qbittorrent
+    command: ["bun", "run", "start"]
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+
+  tracker-worker:
+    image: btshare-app:latest
+    container_name: btshare-tracker-worker
+    env_file:
+      - ./.env
+    depends_on:
+      - app
+    command: ["bun", "run", "tracker:worker"]
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  offline-worker:
+    image: btshare-app:latest
+    container_name: btshare-offline-worker
+    env_file:
+      - ./.env
+    depends_on:
+      - app
+      - qbittorrent
+    command: ["bun", "run", "offline:worker"]
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  cleanup-worker:
+    image: btshare-app:latest
+    container_name: btshare-cleanup-worker
+    env_file:
+      - ./.env
+    depends_on:
+      - app
+    command:
+      - sh
+      - -lc
+      - |
+        while true; do
+          bun run offline:cleanup || true
+          bun run torrents:cleanup || true
+          sleep 86400
+        done
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

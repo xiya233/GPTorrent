@@ -21,6 +21,7 @@
 2. 服务器已放通 TCP `80/443`。
 3. 程序通过主机 Nginx 反向代理，HTTPS 证书使用 Certbot 自动签发。
 4. 运行目录都使用本地磁盘持久化（SQLite 与上传文件都在 `data/`）。
+5. 仓库已内置 Docker 生产配置：`Dockerfile`、`docker-compose.yml`、`.env.example`。
 
 ## 核心进程清单
 
