@@ -152,3 +152,9 @@ export TORRENT_CLEANUP_RETENTION_DAYS=7
 
 - 全部种子：`/rss.xml`
 - 按分类：`/rss.xml?category=分类名`（例如 `category=动画`）
+
+## 生产部署文档
+
+- 总览：`deploy/README.md`
+- Debian 13 手动部署（Bun + systemd + 主机 Nginx + HTTPS）：`deploy/debian13-manual.md`
+- Docker Compose 部署（app + workers + qBittorrent + 主机 Nginx + HTTPS）：`deploy/docker-compose.md`
