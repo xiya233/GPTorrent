@@ -8,7 +8,7 @@ services:
       - TZ=${TZ:-Asia/Shanghai}
       - WEBUI_PORT=8080
     volumes:
-      - ./deploy/qb/config:/config
+      - ./config:/config
       - ./data:/app/data
     ports:
       - "127.0.0.1:8080:8080"
